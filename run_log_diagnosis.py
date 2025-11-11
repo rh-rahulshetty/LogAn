@@ -1,15 +1,19 @@
 import sys
 import os
 
+from log_diagnosis.models.model_zero_shot_classifer import ZeroShotModels
+
 # Add the necessary directories to the system path to import custom modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'Drain3')))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'log_diagnosis')))
 
 # Importing necessary modules for preprocessing, templatizing, and anomaly detection
+from log_diagnosis.models import AllModels, ModelType
 from preprocessing.preprocessing import Preprocessing
 from Drain3.run_drain.run_drain import Templatizer
 from log_diagnosis.anomaly import Anomaly
 from argparse import ArgumentParser, ArgumentTypeError
+from log_diagnosis.utils import prepare_output_dir
 
 
 def validate_boolean(value):
@@ -17,6 +21,30 @@ def validate_boolean(value):
     if value not in ('true', 'false'):
         raise ArgumentTypeError(f"Invalid value for boolean argument: {value}. Please use 'True' or 'False'.")
     return value == 'true'
+
+def parse_model_name(value):
+    """
+    Parse model name argument, accepting both enum values and custom model names.
+    
+    Args:
+        value: String representing either a ZeroShotModels enum name or a model name
+        
+    Returns:
+        ZeroShotModels enum member or the string value itself
+    """
+    # Try to match against ZeroShotModels enum by name
+    try:
+        return ZeroShotModels[value.upper()]
+    except (KeyError, AttributeError):
+        pass
+    
+    # Try to match against ZeroShotModels enum by value
+    for model in ZeroShotModels:
+        if model.value == value:
+            return model
+    
+    # If no enum match, return the string as-is (allows custom model names)
+    return value
 
 # Import pandarallel for parallel processing capabilities
 from pandarallel import pandarallel
@@ -58,10 +86,15 @@ if __name__ == "__main__":
     arg_parser.add_argument('--debug_mode', type=str, help='Enable debug mode for saving debug files', default=True)
     arg_parser.add_argument('--process_log_files', type=validate_boolean, help='Flag to indicate if logs should be processed', default=True)
     arg_parser.add_argument('--process_txt_files', type=validate_boolean, help='Flag to indicate if text should be processed', default=False)
-    
+    arg_parser.add_argument('--model-type', type=ModelType, help='Type of model to use for the anomaly report (Currently Supported Values: zero_shot)', default=ModelType.ZERO_SHOT)
+    arg_parser.add_argument('--model-name', type=parse_model_name, help='Model to use for the anomaly report (Default: "cross-encoder/nli-MiniLM2-L6-H768")', default=ZeroShotModels.CROSSENCODER)
+    arg_parser.add_argument('--clean-up', action='store_true', help='Flag to indicate if the output directory should be cleaned up if it exists')
+
     # Parse the arguments provided by the user
     args = arg_parser.parse_args()
     print(args)
+
+    prepare_output_dir(args.output_dir, args.clean_up)
 
     # Step 1: Initialize and run the preprocessing on the input files
     preprocessing_obj = Preprocessing(args.debug_mode)
@@ -82,7 +115,7 @@ if __name__ == "__main__":
 
     # templatizer.df columns: "text", "preprocessed_text", "truncated_log", "epoch", "timestamps", "file_names", "test_ids"
     # Step 3: Initialize the Anomaly detector and generate the anomaly report
-    anomaly_obj = Anomaly(args.debug_mode)
+    anomaly_obj = Anomaly(args.debug_mode, args.model_type, args.model_name)
     anomaly_obj.get_anomaly_report(templatizer.df, 
                                    args.output_dir + f"/log_diagnosis/", 
                                    args.output_dir + f"/developer_debug_files/", 

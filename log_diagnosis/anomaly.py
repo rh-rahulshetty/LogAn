@@ -6,6 +6,7 @@ import csv
 from .core import Core
 from datetime import datetime
 from utils import get_anomaly_html_str, get_summary_html_str
+from log_diagnosis.models import ModelManager, AllModels, ModelType
 
 import sys
 sys.path.append("..")
@@ -28,13 +29,17 @@ class Anomaly(Core):
         - Instantiate the class and call its methods to process log data and generate anomaly reports.
         - The class leverages machine learning models for GS and FC to perform anomaly detection.
     """
-    def __init__(self, debug_mode):
+    def __init__(self, debug_mode, type: ModelType, model: AllModels):
         """
-        Constructor for the Anomaly class. Currently does nothing but can be expanded if initialization is needed.
+        Initializes the Anomaly class and core class.
+
+        Args:
+            debug_mode (str): The debug mode to use for the anomaly report.
+            type (ModelType): The type of model to use for the anomaly report.
+            model (AllModels): The model to use for the anomaly report.
         """
-        super().__init__()
+        super().__init__(type, model)
         self.debug_mode = debug_mode
-        return
     
     def find_supersets_and_subsets_(self, input_superset_dict):
         """

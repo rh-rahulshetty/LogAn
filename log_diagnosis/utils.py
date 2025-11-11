@@ -4,6 +4,7 @@ import json
 import re
 import os
 from argparse import ArgumentParser
+import shutil
 import sys
 
 from jinja2 import Environment, FileSystemLoader
@@ -213,6 +214,29 @@ def get_summary_html_str(df_for_summary_html, include_golden_signal_dropdown, ig
     )
 
     return rendered_template
+
+def prepare_output_dir(output_dir: str, clean_up: bool = False):
+    """
+    Prepares the output directory by creating necessary subdirectories.
+    
+    Args:
+        output_dir (str): The directory path where output will be stored.
+    """
+    # Clean up output directory if it exists.
+    if clean_up and os.path.exists(output_dir):
+        shutil.rmtree(output_dir, ignore_errors=True)
+
+    # Create necessary subdirectories.
+    FOLDERS = ['run', 'pandarallel_cache', 'test_templates', 'log_diagnosis', 'developer_debug_files', 'metrics']
+    os.makedirs(output_dir, exist_ok=True)
+    for folder in FOLDERS:
+        os.makedirs(os.path.join(output_dir, folder), exist_ok=True)
+
+    # Copy HTML templates libs to the output directory.
+    shutil.copytree(os.path.join(os.path.dirname(__file__), 'templates', 'libs'), os.path.join(output_dir, 'log_diagnosis', 'libs'), dirs_exist_ok=True)
+
+    # Setup Env Variables
+    os.environ['MEMORY_FS_ROOT'] = os.path.join(output_dir, 'pandarallel_cache')
 
 if __name__ == '__main__':
     """

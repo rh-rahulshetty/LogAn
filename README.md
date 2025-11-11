@@ -21,34 +21,15 @@ source .venv/bin/activate
 uv pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
 uv pip install -r requirements.txt
 
-export OUTPUT_DIR="./tmp/output"
-export MEMORY_FS_ROOT="${OUTPUT_DIR}/pandarallel_cache"
-export TRANSFORMERS_CACHE="${OUTPUT_DIR}/cache"
-
-# clean up
-rm -r "${OUTPUT_DIR}/run"
-rm -r "${OUTPUT_DIR}/log_diagnosis"
-rm -r "${OUTPUT_DIR}/metrics"
-rm -r "${OUTPUT_DIR}/developer_debug_files"
-
-# create dirs
-mkdir -p "${OUTPUT_DIR}/run" 
-mkdir -p "${OUTPUT_DIR}/pandarallel_cache"
-mkdir -p "${OUTPUT_DIR}/test_templates"
-mkdir -p "${OUTPUT_DIR}/log_diagnosis"
-mkdir -p "${OUTPUT_DIR}/developer_debug_files"
-mkdir -p "${OUTPUT_DIR}/metrics"
-
-# to copy libs for log html report
-cp -r ./log_diagnosis/templates/libs "${OUTPUT_DIR}/log_diagnosis"
-
 # Run Log Analysis
-uv run python run_log_diagnosis.py --input_files "./examples/Linux_2k.log" --output_dir "./tmp/output"  2>&1 | tee "${OUTPUT_DIR}/run/log_diagnosis.log"
+export OUTPUT_DIR="./tmp/output"
+
+uv run python run_log_diagnosis.py --input_files "./examples/Linux_2k.log" --output_dir "./tmp/output" --model-type "zero_shot" --model-name "cross-encoder/nli-MiniLM2-L6-H768"
 
 # To view report
 uv run python -m http.server 8000 --directory "${OUTPUT_DIR}/"
 
-# server should be available at http://localhost:8000/
+# server should be available at http://localhost:8000/log_diagnosis/
 ```
 
 ### Option 2 - Container
@@ -65,7 +46,7 @@ bash docker.sh build
 
 1. Execute `docker.sh` as follows: 
     ```bash
-    bash docker.sh run OUTPUT_DIR PRODUCT_NAME LOG_FILE_PATH TIME_RANGE(OPTIONAL) -ProcessLogFiles(OPTIONAL) -ProcessTxtFiles(OPTIONAL) -DebugMode(OPTIONAL) 
+    bash docker.sh run OUTPUT_DIR LOG_FILE_PATH TIME_RANGE(OPTIONAL) -ProcessLogFiles(OPTIONAL) -ProcessTxtFiles(OPTIONAL) -DebugMode(OPTIONAL) 
     ```
    - OUTPUT_DIR - The directory where the tool's reports are stored
    - LOG_FILE_PATH - Folders/files separated by colon(:). 

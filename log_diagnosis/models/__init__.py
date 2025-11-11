@@ -4,12 +4,14 @@ from typing import Union
 from log_diagnosis.models.model_zero_shot_classifer import ZeroShotModels
 from log_diagnosis.models.model_zero_shot_classifer import ModelZeroShotClassifer
 
+AllModels = Union[ZeroShotModels, str]
+
 class ModelType(Enum):
     ZERO_SHOT = 'zero_shot'
     SIMILARITY = 'similarity'
 
 class ModelManager:
-    def __init__(self, type=ModelType.ZERO_SHOT, model: Union[ZeroShotModels] = ZeroShotModels.CROSSENCODER):
+    def __init__(self, type=ModelType.ZERO_SHOT, model: AllModels = ZeroShotModels.CROSSENCODER):
         if type == ModelType.ZERO_SHOT:
             self.model = ModelZeroShotClassifer(model)
         elif type == ModelType.SIMILARITY:

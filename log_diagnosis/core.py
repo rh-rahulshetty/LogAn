@@ -12,7 +12,7 @@ from transformers import pipeline
 from transformers.pipelines.pt_utils import KeyDataset
 from datasets import Dataset
 
-from log_diagnosis.models import ModelManager
+from log_diagnosis.models import ModelManager, AllModels, ModelType
 
 pandarallel.initialize(progress_bar=False)
 tqdm.pandas()
@@ -51,12 +51,11 @@ class Core:
             Processes the input DataFrame to detect golden signals and fault categories using zero-shot classification, and generates dataframe for summary and anomaly reports.
     """
     
-    def __init__(self):
+    def __init__(self, type: ModelType, model: AllModels):
         """
-        Initializes the Core class.
+        Initializes the Core class and model manager.
         """
-        self.model_manager = ModelManager()
-        return
+        self.model_manager = ModelManager(type, model)
 
     def backprop_gs_fault_with_temp_ids(self, row, mapping):
         """
