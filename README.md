@@ -118,7 +118,10 @@ uv pip install -r requirements.txt
 # Run Log Analysis
 export OUTPUT_DIR="./tmp/output"
 
-uv run python run_log_diagnosis.py --input_files "./examples/Linux_2k.log" --output_dir "./tmp/output" --model-type "zero_shot" --model-name "cross-encoder/nli-MiniLM2-L6-H768"
+uv run python run_log_diagnosis.py \
+    --input_files "./examples/Linux_2k.log" \
+    --output_dir "$OUTPUT_DIR" \
+    --model-name "cross-encoder/nli-MiniLM2-L6-H768"
 ```
 
 
