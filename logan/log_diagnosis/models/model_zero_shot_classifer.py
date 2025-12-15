@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import Union
-from log_diagnosis.models.manager import ModelTemplate
+from logan.log_diagnosis.models.manager import ModelTemplate
 from transformers import pipeline
 
 class ZeroShotModels(Enum):

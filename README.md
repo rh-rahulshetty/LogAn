@@ -112,22 +112,20 @@ bash container.sh build ## You can change ENV=docker/podman in the file
 uv venv
 source .venv/bin/activate
 
-uv pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
 uv pip install -r requirements.txt
 
 # Run Log Analysis
 export OUTPUT_DIR="./tmp/output"
 
-uv run python run_log_diagnosis.py \
-    --input_files "./examples/Linux_2k.log" \
-    --output_dir "$OUTPUT_DIR" \
-    --model-name "cross-encoder/nli-MiniLM2-L6-H768"
+uv run logan analyze \
+    -f ./examples/Linux_2k.log \
+    -o "$OUTPUT_DIR"
 ```
 
 
 ## How to View the Reports (Output)
 ```bash
-uv run python -m http.server 8000 --directory "${OUTPUT_DIR}"
+uv run logan view -d "${OUTPUT_DIR}"
 
 # server should be available at http://localhost:8000/log_diagnosis
 ``` 

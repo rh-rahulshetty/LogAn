@@ -10,9 +10,7 @@ import sys
 from jinja2 import Environment, FileSystemLoader
 import pandas as pd
 
-import sys
-sys.path.append('..')
-from telemetry.es import get_elasticsearch_config, get_feedback_index
+from logan.telemetry.es import get_elasticsearch_config, get_feedback_index
 
 def get_b64_encoded_credentials(username, passwd):
     credentials = f'{username}:{passwd}'

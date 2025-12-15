@@ -18,7 +18,7 @@ import time
 import numpy as np
 from dateutil import parser as god_parse
 
-from preprocessing import file_utils, pyrbras
+from logan.preprocessing import file_utils, pyrbras
 
 # Global variables
 rbr = None

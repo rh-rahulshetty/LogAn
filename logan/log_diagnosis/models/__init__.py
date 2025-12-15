@@ -1,8 +1,8 @@
 from enum import Enum
 from typing import Union, Optional
 
-from log_diagnosis.models.manager import ModelTemplate, ModelRegistry
-from log_diagnosis.models.model_zero_shot_classifer import ZeroShotModels, ModelZeroShotClassifer
+from logan.log_diagnosis.models.manager import ModelTemplate, ModelRegistry
+from logan.log_diagnosis.models.model_zero_shot_classifer import ZeroShotModels, ModelZeroShotClassifer
 
 AllModels = Union[ZeroShotModels, str]
 
