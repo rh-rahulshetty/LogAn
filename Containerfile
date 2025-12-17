@@ -38,17 +38,70 @@ RUN microdnf clean all && rm -rf /usr/src/Python-3.10.4 /usr/src/Python-3.10.4.t
 ## Getting working directory and env variables
 WORKDIR /
 
-## Settting up Python dependencies
-COPY requirements.txt .
-RUN pip3 install -r requirements.txt
-RUN pip3 install torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+# Install uv dependency manager
+ADD https://astral.sh/uv/0.9.17/install.sh /uv-installer.sh
+RUN sh /uv-installer.sh && rm /uv-installer.sh
+ENV PATH="/root/.local/bin/:$PATH"
 
 ## Copying source code
 WORKDIR /opt/app
 COPY . .
 
-## Changing to non-root user
-USER 1001
+# Install logan package
+RUN uv pip install -e .
+
+# Make run.sh executable
+RUN chmod +x run.sh
+
+#######################################
+# Environment Variable Defaults
+#######################################
+
+# Mode: 'analyze' to run log analysis, 'view' to serve report via HTTP
+ENV LOGAN_MODE="analyze"
+
+# Input files/directories (comma-separated for multiple)
+# Example: "/data/logs/app.log,/data/logs/system.log" or "/data/logs/"
+ENV LOGAN_INPUT_FILES="/data/input"
+
+# Output directory for analysis results
+ENV LOGAN_OUTPUT_DIR="/data/output"
+
+# Time range for analysis
+# Options: all-data, 1-day, 2-day, ..., 1-week, 2-week, 1-month
+ENV LOGAN_TIME_RANGE="all-data"
+
+# Model type for anomaly detection
+# Options: zero_shot, similarity, custom
+ENV LOGAN_MODEL_TYPE="zero_shot"
+
+# Model to use for classification
+# Built-in: bart, crossencoder
+# Or specify a custom HuggingFace model name
+ENV LOGAN_MODEL="crossencoder"
+
+# Enable debug mode (saves debug files)
+ENV LOGAN_DEBUG_MODE="true"
+
+# Process .log files from directories
+ENV LOGAN_PROCESS_LOG_FILES="true"
+
+# Process .txt files from directories
+ENV LOGAN_PROCESS_TXT_FILES="false"
+
+# Clean up output directory before running
+ENV LOGAN_CLEAN_UP="false"
+
+# Port for view mode HTTP server
+ENV LOGAN_VIEW_PORT="8000"
+
+# Expose port for view mode
+EXPOSE 8000
+
+# Directory to serve in view mode (defaults to LOGAN_OUTPUT_DIR if not set)
+ENV LOGAN_VIEW_DIR=""
+
+#######################################
 
 ## Running Script
 ENTRYPOINT ["./run.sh"]
