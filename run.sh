@@ -57,11 +57,20 @@ LOGAN_VIEW_DIR="${LOGAN_VIEW_DIR:-}"
 
 #######################################
 
-# Determine the command prefix (use uv run if uv is installed)
-if command -v uv &> /dev/null; then
-    LOGAN_CMD="uv run logan"
-else
+# Determine the command prefix
+# If running in a uv-managed venv (has .venv/bin/logan), use that directly
+# Otherwise fall back to system logan command
+if [ -x ".venv/bin/logan" ]; then
+    LOGAN_CMD=".venv/bin/logan"
+elif [ -x "/opt/app-root/src/.venv/bin/logan" ]; then
+    # Container path
+    LOGAN_CMD="/opt/app-root/src/.venv/bin/logan"
+elif command -v logan &> /dev/null; then
     LOGAN_CMD="logan"
+else
+    echo -e "${RED}Error: logan command not found${NC}"
+    echo "Make sure logan is installed: pip install -e . or uv pip install -e ."
+    exit 1
 fi
 
 echo -e "${CYAN}╔═══════════════════════════════════════════════════════════╗${NC}"

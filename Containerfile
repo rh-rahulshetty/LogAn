@@ -1,61 +1,46 @@
-FROM registry.access.redhat.com/ubi9/ubi-minimal:9.4-1227.1726694542
+# Stage 0: grab uv binary from official uv image
+FROM ghcr.io/astral-sh/uv:latest AS uvbin
 
-# Install necessary packages
-RUN microdnf update -y \
-    && microdnf install -y tar wget gcc openssl-devel bzip2-devel libffi-devel make zlib-devel \
-    && microdnf clean all
+# Final image: start from Red Hat UBI python image 
+# More details: https://catalog.redhat.com/en/software/containers/ubi9/python-311/63f764b03f0b02a2e2d63fff#overview
+FROM registry.access.redhat.com/ubi9/python-311:9.7
 
-RUN microdnf install -y bzip2 gzip xz xz-devel zstd lz4 lz4-devel zip unzip cpio file \
-    && microdnf clean all
+USER root
 
-# Install OpenJDK 11
-RUN microdnf install -y java-11-openjdk-devel \
-    && microdnf clean all
+# Install runtime packages
+RUN yum update -y \
+ && yum install -y \
+      java-11-openjdk-headless \
+      wget \
+      make gcc \
+      unzip \
+      python3-devel \
+ && yum clean all
 
-# Download and install Python 3.10.4
-WORKDIR /usr/src
-RUN wget https://www.python.org/ftp/python/3.10.4/Python-3.10.4.tgz \
-    && tar xzf Python-3.10.4.tgz \
-    && cd Python-3.10.4 \
-    && ./configure --enable-optimizations \
-    && make altinstall
+# Copy uv binary (and helper uvx if present) from upstream image
+COPY --from=uvbin /uv /usr/local/bin/uv
+COPY --from=uvbin /uvx /usr/local/bin/uvx
+RUN chmod 755 /usr/local/bin/uv /usr/local/bin/uvx || true
 
-# Install pip for Python 3.10
-RUN wget https://bootstrap.pypa.io/get-pip.py \
-    && python3.10 get-pip.py \
-    && pip3 install --upgrade pip
+# Switch to non-root user
+USER 1001
 
-# Set default Python alternatives
-RUN alternatives --install /usr/bin/python3 python3 /usr/local/bin/python3.10 1 \
-    && alternatives --install /usr/bin/pip3 pip3 /usr/local/bin/pip3.10 1
+# Optional: verify
+RUN java -version && python3 --version && pip3 --version && uv --version
 
-# Verify installations
-RUN java -version && python3 --version && pip3 --version
+# ----------------------------
+# Switch to UBI default app dir
+# ----------------------------
+WORKDIR /opt/app-root/src
 
-# Clean up
-RUN microdnf clean all && rm -rf /usr/src/Python-3.10.4 /usr/src/Python-3.10.4.tgz /usr/src/get-pip.py
-
-## Getting working directory and env variables
-WORKDIR /
-
-# Install uv dependency manager
-ADD https://astral.sh/uv/0.9.17/install.sh /uv-installer.sh
-RUN sh /uv-installer.sh && rm /uv-installer.sh
-ENV PATH="/root/.local/bin/:$PATH"
-
-## Copying source code
-WORKDIR /opt/app
+# Install logan dependencies
+COPY --chmod=755 requirements.txt .
+RUN uv venv --python python3.11 && uv pip install -r requirements.txt
 
 # Install logan package
-COPY requirements.txt .
-RUN uv venv && uv pip install -r requirements.txt
-
-# Copying source code
-COPY . .
+COPY --chmod=755 . .
 RUN uv pip install -e . --no-deps
 
-# Make run.sh executable
-RUN chmod +x run.sh
 
 #######################################
 # Environment Variable Defaults
