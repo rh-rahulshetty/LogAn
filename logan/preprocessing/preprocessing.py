@@ -642,6 +642,9 @@ class Preprocessing:
             
             if not future_flag:
                 return timestamp, ts
+
+            # TODO: Handle future flag case
+            return timestamp, ts
         except Exception as e:
             print(f"Error extracting timestamp \nLogline: {log} \nError: {e}")
             return None, None
@@ -677,7 +680,7 @@ class Preprocessing:
             
         return timestamp, ts, log, preprocessed_text, digit_count, alphabet_count + digit_count + 1, len(log.split(" "))
 
-    def preprocess(self, input_files, time_range, output_dir, process_log_files, process_txt_files):
+    def preprocess(self, input_files, time_range, output_dir, process_all_files, process_log_files, process_txt_files):
         """
         Preprocess a set of log files by filtering, processing, and performing truncation of logs using statistical analysis on the logs length.
         
@@ -689,6 +692,7 @@ class Preprocessing:
                                 containing log files.
             time_range (str): Time range filter for the logs. Can be a specific range or "all-data" to include everything.
             output_dir (str): Directory path where processed files, ignored files, and plots will be saved.
+            process_all_files (boolean): Flag to process all text based files irrespective of the file extension.
             process_log_files (boolean): Flag to process LOG files from folder. This will not affect files that are explicitly provided by the user.
             process_txt_files (boolean): Flag to process TXT files from folder. This will not affect files that are explicitly provided by the user.
 
@@ -766,13 +770,16 @@ class Preprocessing:
                 all_files_in_dir = [fp for fp in glob.glob(os.path.join(file_, '**'), recursive=True) if not os.path.isdir(fp)]
 
                 log_files, txt_files = [], []
-                if process_txt_files:
-                    txt_files = [file for file in all_files_in_dir if self.pattern_txt.match(os.path.basename(file))]
-                if process_log_files:
-                    log_files = [file for file in all_files_in_dir if self.pattern_log.match(os.path.basename(file))]
+                if process_all_files:
+                    files_to_process.extend(all_files_in_dir)
+                else:
+                    if process_txt_files:
+                        txt_files = [file for file in all_files_in_dir if self.pattern_txt.match(os.path.basename(file))]
+                    if process_log_files:
+                        log_files = [file for file in all_files_in_dir if self.pattern_log.match(os.path.basename(file))]
 
-                files_to_process.extend(log_files + txt_files)
-                ignored_list.extend([fp for fp in all_files_in_dir if fp not in (log_files + txt_files)])
+                    files_to_process.extend(log_files + txt_files)
+                    ignored_list.extend([fp for fp in all_files_in_dir if fp not in (log_files + txt_files)])
 
             # Handle individual files based on their extensions
             elif ('.xml' in extensions) or (self.is_csv_present == "false" and ('.csv' in extensions or '.xlsx' in extensions)) or ('.tsv' in extensions):

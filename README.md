@@ -34,7 +34,7 @@ podman run --rm \
     -v ./tmp/output/:/data/output/:z \
     -e LOGAN_INPUT_FILES="/data/input/Linux_2k.log" \
     -e LOGAN_OUTPUT_DIR=/data/output/ \
-    ghcr.io/Log-Analyzer/LogAn:latest
+    ghcr.io/log-analyzer/logan:latest
 ```
 
 
@@ -42,12 +42,14 @@ podman run --rm \
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `LOGAN_INPUT_FILES` | `/data/input` | Input files/directories (comma-separated for multiple) |
+| `LOGAN_INPUT_FILES` | `` | Input files/directories (comma-separated for multiple) |
+| `LOGAN_INPUT_GLOB` | `` | Input file pattern (glob) for matching multiple files |
 | `LOGAN_OUTPUT_DIR` | `/data/output` | Output directory for analysis results |
 | `LOGAN_TIME_RANGE` | `all-data` | Time range filter: `all-data`, `1-day`, `2-day`, ..., `1-week`, `2-week`, `1-month` |
 | `LOGAN_MODEL_TYPE` | `zero_shot` | Model type: `zero_shot`, `similarity`, `custom` |
 | `LOGAN_MODEL` | `crossencoder` | Model for classification: `bart`, `crossencoder`, or custom HuggingFace model |
 | `LOGAN_DEBUG_MODE` | `true` | Enable debug mode (saves additional metadata files) |
+| `LOGAN_PROCESS_ALL_FILES` | `false` | Process all text-based files irrespective of file extension |
 | `LOGAN_PROCESS_LOG_FILES` | `true` | Process `.log` files found in directories |
 | `LOGAN_PROCESS_TXT_FILES` | `false` | Process `.txt` files found in directories |
 | `LOGAN_CLEAN_UP` | `false` | Clean output directory before running |

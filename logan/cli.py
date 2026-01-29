@@ -7,6 +7,7 @@ A click-based command-line interface for log analysis, templatization, and anoma
 import os
 import sys
 import click
+import glob as glob_lib
 
 import http.server
 import socketserver
@@ -92,9 +93,13 @@ def cli():
 @click.option(
     "--files", "-f",
     multiple=True,
-    required=True,
+    required=False,
     type=click.Path(exists=True),
     help="Input files or directories for anomaly report generation. Can be specified multiple times."
+)
+@click.option(
+    "-g", "--glob",
+    help="Glob file pattern to match log files"
 )
 @click.option(
     "--time-range", "-t",
@@ -114,6 +119,12 @@ def cli():
     default=True,
     show_default=True,
     help="Enable debug mode for saving debug files."
+)
+@click.option(
+    "--process-all-files/--no-process-all-files",
+    default=False,
+    show_default=True,
+    help="Flag to indicate if all text based files should be processed irrespective of the file extension."
 )
 @click.option(
     "--process-log-files/--no-process-log-files",
@@ -147,7 +158,7 @@ def cli():
     default=False,
     help="Clean up the output directory if it already exists."
 )
-def analyze(files, time_range, output_dir, debug_mode, process_log_files, 
+def analyze(files, glob, time_range, output_dir, debug_mode, process_all_files, process_log_files, 
             process_txt_files, model_type, model, clean_up):
     """
     Analyze log files for anomalies.
@@ -162,19 +173,16 @@ def analyze(files, time_range, output_dir, debug_mode, process_log_files,
     \b
     Examples:
         # Analyze a single log file
-        logan analyze -i server.log -o ./output
-        
-        # Analyze multiple files with time range
-        logan analyze -i logs/app.log -i logs/system.log -t 1-day -o ./results
+        logan analyze -f server.log -o ./output
         
         # Analyze a directory of logs
-        logan analyze -i /var/log/myapp/ -o ./analysis --process-txt-files
+        logan analyze -f /var/log/myapp/ -o ./analysis --process-txt-files
         
-        # Use a specific model
-        logan analyze -i logs/ -o ./output --model bart
+        # Analyze a directory of logs using a glob pattern
+        logan analyze -g "*.log" -o ./analysis
         
         # Clean existing output and run fresh analysis
-        logan analyze -i logs/ -o ./output --clean-up
+        logan analyze -f logs/ -o ./output --clean-up
     """
     # Convert debug_mode to string format expected by internal modules
     debug_mode_str = "true" if debug_mode else "false"
@@ -184,15 +192,25 @@ def analyze(files, time_range, output_dir, debug_mode, process_log_files,
     
     click.echo(f"\nConfiguration:")
     click.echo(f"  Input files: {list(files)}")
+    click.echo(f"  Glob pattern: {glob}")
     click.echo(f"  Time range: {time_range}")
     click.echo(f"  Output directory: {output_dir}")
     click.echo(f"  Debug mode: {debug_mode}")
-    click.echo(f"  Process .log files: {process_log_files}")
-    click.echo(f"  Process .txt files: {process_txt_files}")
+    click.echo(f"  Process all files: {process_all_files}")
+    click.echo(f"  Process only .log files: {process_log_files}")
+    click.echo(f"  Process only .txt files: {process_txt_files}")
     click.echo(f"  Model type: {model_type}")
     click.echo(f"  Model: {model}")
     click.echo(f"  Clean up: {clean_up}")
     click.echo()
+    
+    files = list(files)
+    if glob:
+        files.extend(glob_lib.glob(glob))
+    
+    if len(files) == 0:
+        click.echo(click.style("No log files found. Please provide input files or use a glob pattern.", fg="red", bold=True))
+        sys.exit(1)
     
     # Prepare output directory
     click.echo(click.style("Step 0: Preparing output directory...", fg="cyan"))
@@ -207,9 +225,10 @@ def analyze(files, time_range, output_dir, debug_mode, process_log_files,
     click.echo(click.style("\nStep 1: Preprocessing log files...", fg="cyan"))
     preprocessing_obj = Preprocessing(debug_mode_str)
     preprocessing_obj.preprocess(
-        list(files),
+        files,
         time_range,
         output_dir,
+        process_all_files,
         process_log_files,
         process_txt_files
     )

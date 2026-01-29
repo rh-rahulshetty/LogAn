@@ -40,6 +40,7 @@ class Templatizer:
 
         # Store the path to the DRAIN3 configuration file
         self.config_path = config_path
+        self.logger.info(f"DRAIN3 configuration file: {self.config_path}")
         
         # Placeholder for the DataFrame after template mining
         self.df = None

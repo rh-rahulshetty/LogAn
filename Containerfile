@@ -52,7 +52,8 @@ ENV LOGAN_MODE="analyze"
 
 # Input files/directories (comma-separated for multiple)
 # Example: "/data/logs/app.log,/data/logs/system.log" or "/data/logs/"
-ENV LOGAN_INPUT_FILES="/data/input"
+ENV LOGAN_INPUT_FILES=""
+ENV LOGAN_INPUT_GLOB=""
 
 # Output directory for analysis results
 ENV LOGAN_OUTPUT_DIR="/data/output"
@@ -73,10 +74,13 @@ ENV LOGAN_MODEL="crossencoder"
 # Enable debug mode (saves debug files)
 ENV LOGAN_DEBUG_MODE="true"
 
-# Process .log files from directories
+# Process all text based files irrespective of the file extension
+ENV LOGAN_PROCESS_ALL_FILES="false"
+
+# Process only .log files from directories
 ENV LOGAN_PROCESS_LOG_FILES="true"
 
-# Process .txt files from directories
+# Process only .txt files from directories
 ENV LOGAN_PROCESS_TXT_FILES="false"
 
 # Clean up output directory before running

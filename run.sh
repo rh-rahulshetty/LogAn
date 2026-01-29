@@ -23,7 +23,8 @@ NC='\033[0m' # No Color
 LOGAN_MODE="${LOGAN_MODE:-analyze}"
 
 # Input files/directories (comma-separated for multiple)
-LOGAN_INPUT_FILES="${LOGAN_INPUT_FILES:-/data/input}"
+LOGAN_INPUT_FILES="${LOGAN_INPUT_FILES:-}"
+LOGAN_INPUT_GLOB="${LOGAN_INPUT_GLOB:-}"
 
 # Output directory for analysis results
 LOGAN_OUTPUT_DIR="${LOGAN_OUTPUT_DIR:-/data/output}"
@@ -39,6 +40,9 @@ LOGAN_MODEL="${LOGAN_MODEL:-crossencoder}"
 
 # Enable debug mode (saves debug files)
 LOGAN_DEBUG_MODE="${LOGAN_DEBUG_MODE:-true}"
+
+# Process all text based files irrespective of the file extension
+LOGAN_PROCESS_ALL_FILES="${LOGAN_PROCESS_ALL_FILES:-false}"
 
 # Process .log files from directories
 LOGAN_PROCESS_LOG_FILES="${LOGAN_PROCESS_LOG_FILES:-true}"
@@ -84,11 +88,13 @@ print_config() {
     echo "  LOGAN_CMD:               ${LOGAN_CMD}"
     echo "  LOGAN_MODE:              ${LOGAN_MODE}"
     echo "  LOGAN_INPUT_FILES:       ${LOGAN_INPUT_FILES}"
+    echo "  LOGAN_INPUT_GLOB:        ${LOGAN_INPUT_GLOB}"
     echo "  LOGAN_OUTPUT_DIR:        ${LOGAN_OUTPUT_DIR}"
     echo "  LOGAN_TIME_RANGE:        ${LOGAN_TIME_RANGE}"
     echo "  LOGAN_MODEL_TYPE:        ${LOGAN_MODEL_TYPE}"
     echo "  LOGAN_MODEL:             ${LOGAN_MODEL}"
     echo "  LOGAN_DEBUG_MODE:        ${LOGAN_DEBUG_MODE}"
+    echo "  LOGAN_PROCESS_ALL_FILES: ${LOGAN_PROCESS_ALL_FILES}"
     echo "  LOGAN_PROCESS_LOG_FILES: ${LOGAN_PROCESS_LOG_FILES}"
     echo "  LOGAN_PROCESS_TXT_FILES: ${LOGAN_PROCESS_TXT_FILES}"
     echo "  LOGAN_CLEAN_UP:          ${LOGAN_CLEAN_UP}"
@@ -102,9 +108,10 @@ run_analyze() {
     echo ""
 
     # Validate required environment variables
-    if [ -z "${LOGAN_INPUT_FILES}" ]; then
-        echo -e "${RED}Error: LOGAN_INPUT_FILES is required for analyze mode${NC}"
-        echo "Please set LOGAN_INPUT_FILES to a comma-separated list of files or directories"
+    if [ -z "${LOGAN_INPUT_FILES}" ] && [ -z "${LOGAN_INPUT_GLOB}" ]; then
+        echo -e "${RED}Error: Either LOGAN_INPUT_FILES or LOGAN_INPUT_GLOB must be set for analyze mode${NC}"
+        echo "Please set at least one of LOGAN_INPUT_FILES (comma-separated list of files or directories)"
+        echo "or LOGAN_INPUT_GLOB (file pattern) to proceed."
         exit 1
     fi
 
@@ -117,14 +124,21 @@ run_analyze() {
     CMD="${LOGAN_CMD} analyze"
 
     # Parse comma-separated input files and add each as a -f flag
-    IFS=',' read -ra FILES <<< "${LOGAN_INPUT_FILES}"
-    for file in "${FILES[@]}"; do
-        # Trim whitespace
-        file=$(echo "$file" | xargs)
-        if [ -n "$file" ]; then
-            CMD="$CMD -f \"$file\""
-        fi
-    done
+    if [ -n "${LOGAN_INPUT_FILES}" ]; then
+        IFS=',' read -ra FILES <<< "${LOGAN_INPUT_FILES}"
+        for file in "${FILES[@]}"; do
+            # Trim whitespace
+            file=$(echo "$file" | xargs)
+            if [ -n "$file" ]; then
+                CMD="$CMD -f \"$file\""
+            fi
+        done
+    fi
+
+    # Add glob flag
+    if [ -n "${LOGAN_INPUT_GLOB}" ]; then
+        CMD="$CMD -g \"${LOGAN_INPUT_GLOB}\""
+    fi
 
     # Add output directory
     CMD="$CMD -o \"${LOGAN_OUTPUT_DIR}\""
@@ -145,18 +159,23 @@ run_analyze() {
         CMD="$CMD --no-debug-mode"
     fi
 
-    # Add process log files flag
-    if [ "${LOGAN_PROCESS_LOG_FILES,,}" = "true" ]; then
-        CMD="$CMD --process-log-files"
+    # Add process all files flag
+    if [ "${LOGAN_PROCESS_ALL_FILES,,}" = "true" ]; then
+        CMD="$CMD --process-all-files"
     else
-        CMD="$CMD --no-process-log-files"
-    fi
+        # Add process log files flag
+        if [ "${LOGAN_PROCESS_LOG_FILES,,}" = "true" ]; then
+            CMD="$CMD --process-log-files"
+        else
+            CMD="$CMD --no-process-log-files"
+        fi
 
-    # Add process txt files flag
-    if [ "${LOGAN_PROCESS_TXT_FILES,,}" = "true" ]; then
-        CMD="$CMD --process-txt-files"
-    else
-        CMD="$CMD --no-process-txt-files"
+        # Add process txt files flag
+        if [ "${LOGAN_PROCESS_TXT_FILES,,}" = "true" ]; then
+            CMD="$CMD --process-txt-files"
+        else
+            CMD="$CMD --no-process-txt-files"
+        fi
     fi
 
     # Add clean up flag
