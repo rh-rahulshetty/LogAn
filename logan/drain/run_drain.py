@@ -94,20 +94,19 @@ class Templatizer:
         # Initialize a dictionary to store the loglines grouped by template IDs
         template_log_dict = {}
 
-        # Attempt to mine templates by applying DRAIN to each log message in the DataFrame
+        # Mine templates by iterating directly over the column (avoids pd.Series overhead of df.apply)
         try:
-            # Apply the template miner to the 'truncated_log' column and assign the resulting cluster ID
-            df["test_ids"] = df.apply(
-                lambda row: template_miner_temporary.add_log_message(row["truncated_log"])['cluster_id'],
-                axis=1
-            )
+            test_ids = []
+            for log in df["truncated_log"].values:
+                test_ids.append(template_miner_temporary.add_log_message(log)['cluster_id'])
+            df["test_ids"] = test_ids
+
             if (self.debug_mode == "true"):
                 template_log_dict = df.groupby("test_ids")["truncated_log"].agg(list).to_dict()
                 with open(os.path.join(output_dir, "developer_debug_files", "matcher_output_json.json"), 'w') as json_file:
                     json.dump(template_log_dict, json_file, indent=4)
 
         except Exception as e:
-            # Log any errors encountered during the mining process
             self.logger.error(f"Error learning templates for -1 test_ids in DataFrame: {e}")
 
         # Store the DataFrame with the assigned cluster IDs

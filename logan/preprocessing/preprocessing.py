@@ -18,7 +18,7 @@ import time
 import numpy as np
 from dateutil import parser as god_parse
 
-from logan.preprocessing import file_utils, pyrbras
+from logan.preprocessing import pyrbras
 
 # Global variables
 rbr = None
@@ -28,8 +28,8 @@ is_initialized = False
 DEFAULT_CONFIG = "config.ini"
 DEFAULT_CONFIG_SECTION = "preprocessing"
 
-# Initialize pandarallel
-pandarallel.initialize(progress_bar=True, nb_workers=min(os.cpu_count() or 2, 4))
+# Initialize pandarallel — use all available cores, disable progress bar to reduce overhead
+pandarallel.initialize(progress_bar=False, nb_workers=os.cpu_count() or 2)
 
 def initialize_once():
     """
@@ -124,8 +124,13 @@ class Preprocessing:
             alphabet-count (int)
             digit-count (int)
         """
-        alphabet_count = sum(c.isalpha() for c in logline)
-        digit_count = sum(c.isdigit() for c in logline)
+        alphabet_count = 0
+        digit_count = 0
+        for c in logline:
+            if c.isalpha():
+                alphabet_count += 1
+            elif c.isdigit():
+                digit_count += 1
         return alphabet_count, digit_count
 
     def preprocess_logs(self, logs):
@@ -140,34 +145,23 @@ class Preprocessing:
         logs = logs.lower().strip()
         return logs
 
-    def compute_preprocessing_statistics(self, all_files, num_log_lines_processed, time, output_dir):
+    def compute_preprocessing_statistics(self, num_log_lines_processed, time_ms, output_dir, file_stats):
         """
-        computes statistics of preprocessing code
+        computes statistics of preprocessing code using pre-collected file stats
         
         Args:
-            all_files (list): list of files processed
-            num_log_lines (int): number of logs processed.
-            time (int): time took to performe preprocessing.
-            output_dir (str): serialized json object as a string.
+            num_log_lines_processed (int): number of logs processed.
+            time_ms (float): time took to perform preprocessing in milliseconds.
+            output_dir (str): output directory path.
+            file_stats (dict): pre-collected stats with 'total_size_bytes' and 'num_log_lines_total'.
         Returns:
             None
         """
-        total_size_bytes = 0
-        num_log_lines_total = 0
-        num_log_lines_whitespaces = 0
-
-        # Calculate file statistics
-        for fp in all_files:
-            total_size_bytes += os.path.getsize(fp)
-            num_log_lines_total += file_utils.count_file_lines(fp)
-            num_log_lines_whitespaces += file_utils.count_file_line_whitespaces(fp)
-
         metrics = {
-            'file_size_bytes': total_size_bytes,
+            'file_size_bytes': file_stats['total_size_bytes'],
             'num_log_lines_processed': num_log_lines_processed,
-            "num_log_lines_total": num_log_lines_total,
-            "num_log_lines_whitespaces": num_log_lines_whitespaces,
-            'preprocessing_time_ms': time
+            "num_log_lines_total": file_stats['num_log_lines_total'],
+            'preprocessing_time_ms': time_ms
         }
 
         with open(os.path.join(output_dir, "metrics", "preprocessing.json"), 'w') as writer:
@@ -213,7 +207,8 @@ class Preprocessing:
 
     def detect_jsons(self, logs):
         """
-        For a given list of logs, this fucntion finds the logs which are json objects or multiline logs
+        For a given list of logs, this function finds the logs which are json objects or multiline logs.
+        Uses a quick prefix check to avoid expensive json.loads on non-JSON lines.
         
         Args:
             logs (list): list of logs
@@ -224,20 +219,25 @@ class Preprocessing:
         multiline_logs, json_logs = [], []
 
         for log in logs:
-            try:
-                json_object = json.loads(log)
-                if self.is_valid_json_object(json_object):
-                    json_logs.append(json_object)
-                else:
+            stripped = log.lstrip()
+            if stripped and stripped[0] == '{':
+                try:
+                    json_object = json.loads(log)
+                    if self.is_valid_json_object(json_object):
+                        json_logs.append(json_object)
+                    else:
+                        multiline_logs.append(log)
+                except (json.JSONDecodeError, ValueError):
                     multiline_logs.append(log)
-            except Exception as e:
+            else:
                 multiline_logs.append(log)
 
         return multiline_logs, json_logs
 
     def process_files(self, file_list):
         """
-        For a given list of file, this fucntion outputs two dataframe one for multiline logs and another for json objects
+        For a given list of file, this function outputs two dataframes one for multiline logs and another for json objects.
+        Also collects file stats (size, line count) during the read to avoid a second pass.
         
         Args:
             file_list (list): list of input file paths
@@ -249,10 +249,14 @@ class Preprocessing:
         json_logs_list = []
         file_names_multiline = []
         file_names_json = []
+        total_size_bytes = 0
+        num_log_lines_total = 0
         
         for file in tqdm(file_list):
+            total_size_bytes += os.path.getsize(file)
             with open(file, "r", encoding='utf-8', errors='ignore') as f:
                 lines = f.readlines()
+                num_log_lines_total += len(lines)
                 multiline_logs, json_logs = self.detect_jsons(lines)
 
                 logs.extend(multiline_logs)
@@ -260,6 +264,11 @@ class Preprocessing:
 
                 file_names_multiline.extend([file] * len(multiline_logs))
                 file_names_json.extend([file] * len(json_logs))
+
+        self._file_stats = {
+            'total_size_bytes': total_size_bytes,
+            'num_log_lines_total': num_log_lines_total,
+        }
 
         multiline_df = pd.DataFrame({"text": logs, "file_names": file_names_multiline})
         json_df = pd.DataFrame({"text": json_logs_list, "file_names": file_names_json})
@@ -979,12 +988,12 @@ class Preprocessing:
         print("Min epoch (human-readable):", min_readable)
         print("Max epoch (human-readable):", max_readable)
 
-        # Save preprocessing statistics and final DataFrame
+        # Save preprocessing statistics using pre-collected file stats from process_files
         self.compute_preprocessing_statistics(
-            files_to_process, 
             len(df), 
             (time.time() - start_time) * 1000, 
-            output_dir
+            output_dir,
+            self._file_stats
         )
         self.df = df  # Store the final processed logs DataFrame in the class instance.
         if (self.debug_mode == "true"):
