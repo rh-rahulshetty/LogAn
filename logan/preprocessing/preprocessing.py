@@ -56,6 +56,8 @@ class Preprocessing:
         self.split_pattern = re.compile(r'(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])')
         self.whitespace_pattern = re.compile(r'\s+')
         self.continuos_spaces = re.compile(r'[^\S\n]+')
+        self._non_alpha_pattern = re.compile(r'[^a-zA-Z]')
+        self._non_digit_pattern = re.compile(r'[^0-9]')
         self.z_threshold = 2
         self.master_timestamp_list, self.master_format_list = self.get_master_lists()
 
@@ -114,6 +116,30 @@ class Preprocessing:
 
         return master_timestamp_list, master_format_list
 
+    def _reorder_patterns_by_frequency(self, sample_texts):
+        """
+        Samples log lines to detect the dominant timestamp patterns, then reorders
+        master_timestamp_list / master_format_list so the most-frequently-matched
+        patterns are tried first.  Uses a stable sort so patterns with equal hit
+        counts keep their original length-descending order.
+        """
+        hit_counts = [0] * len(self.master_timestamp_list)
+
+        for log in sample_texts:
+            for idx, pattern in enumerate(self.master_timestamp_list):
+                if re.search(pattern, log):
+                    hit_counts[idx] += 1
+                    break
+
+        # Stable sort: most-hit patterns first; ties preserve original order (longest first)
+        indices = sorted(
+            range(len(hit_counts)),
+            key=lambda i: hit_counts[i],
+            reverse=True,
+        )
+        self.master_timestamp_list = [self.master_timestamp_list[i] for i in indices]
+        self.master_format_list = [self.master_format_list[i] for i in indices]
+
     def count_alphabets_and_digits(self, logline):
         """
         counts the number of occurences of alphabets and numbers in a given logline
@@ -124,13 +150,8 @@ class Preprocessing:
             alphabet-count (int)
             digit-count (int)
         """
-        alphabet_count = 0
-        digit_count = 0
-        for c in logline:
-            if c.isalpha():
-                alphabet_count += 1
-            elif c.isdigit():
-                digit_count += 1
+        alphabet_count = len(self._non_alpha_pattern.sub('', logline))
+        digit_count = len(self._non_digit_pattern.sub('', logline))
         return alphabet_count, digit_count
 
     def preprocess_logs(self, logs):
@@ -565,27 +586,34 @@ class Preprocessing:
                     date_obj, future_flag = self.day_of_the_year(match_original)
                     return match_output, date_obj.timestamp(), future_flag
 
+                parsed_date = None
+                # Fast path: strptime with the known format (~5-10x faster than dateutil)
                 try:
-                    parsed_date = god_parse.parse(match, tzinfos=timezone_dict)
-                except:
+                    parsed_date = datetime.strptime(match, format)
+                except (ValueError, TypeError):
+                    # Strip timezone abbreviation and retry strptime
+                    clean_match = match
                     found_zone = False
-                    for z, timezone in timezone_dict.items():
-                        if z in match:
-                            match = match.replace(z, "").strip()
-                            tz = pytz.timezone(timezone)
+                    tz_obj = None
+                    for z, tz_name in timezone_dict.items():
+                        if z in clean_match:
+                            clean_match = clean_match.replace(z, "").strip()
+                            tz_obj = pytz.timezone(tz_name)
                             found_zone = True
                             break
-                    
-                    match = re.sub(r"[A-Za-z]+$", "", match).strip()                  
+                    if not found_zone:
+                        clean_match = re.sub(r"[A-Za-z]+$", "", clean_match).strip()
                     try:
-                        parsed_date = datetime.strptime(match, format)
+                        parsed_date = datetime.strptime(clean_match, format)
                         if found_zone:
-                            parsed_date = tz.localize(parsed_date)
-                        else:
-                            gmt = pytz.timezone('GMT')
-                            parsed_date = parsed_date.astimezone(gmt)
-                    except Exception:
-                        continue
+                            parsed_date = tz_obj.localize(parsed_date)
+                    except (ValueError, TypeError):
+                        # Last resort: flexible dateutil parser
+                        try:
+                            parsed_date = god_parse.parse(match, tzinfos=timezone_dict)
+                        except Exception:
+                            continue
+
                 if parsed_date is None:
                     return match_output, None, False
                 
@@ -814,10 +842,16 @@ class Preprocessing:
         # Process the log files and get dataframes for logs and JSON objects
         df, df_json = self.process_files(files_to_process)
 
-        # Process JSON data in parallel
+        # Process JSON data in parallel (return tuples, build DataFrame once — avoids per-row pd.Series overhead)
         df_json = df_json.dropna()
         if len(df_json) > 0:
-            df_json[['timestamps', 'epoch', 'text', 'preprocessed_text', 'numeric_count', "total_count", "token_count", "discarded"]] = df_json['text'].parallel_apply(lambda json_obj: pd.Series(self.process_fn_json(json_obj)))
+            json_results = df_json['text'].parallel_apply(lambda json_obj: self.process_fn_json(json_obj))
+            json_result_df = pd.DataFrame(
+                json_results.tolist(),
+                columns=['timestamps', 'epoch', 'text', 'preprocessed_text', 'numeric_count', 'total_count', 'token_count', 'discarded'],
+                index=df_json.index,
+            )
+            df_json[['timestamps', 'epoch', 'text', 'preprocessed_text', 'numeric_count', 'total_count', 'token_count', 'discarded']] = json_result_df
         else:
             df_json = pd.DataFrame({
                 'timestamps': [],
@@ -840,10 +874,23 @@ class Preprocessing:
         df_json = df_json.drop(columns=["discarded"])
 
         print(f"Debug mode is set to: {self.debug_mode}")
-        # Process multiline log data in parallel
+
+        # Detect dominant timestamp patterns from a sample and reorder for fast matching
+        if len(df) > 0:
+            sample_size = min(200, len(df))
+            sample_indices = np.linspace(0, len(df) - 1, sample_size, dtype=int)
+            self._reorder_patterns_by_frequency(df['text'].iloc[sample_indices].tolist())
+
+        # Process multiline log data in parallel (return tuples, build DataFrame once — avoids per-row pd.Series overhead)
         print("Starting pandarallel for log processing")
         if len(df) > 0:
-            df[['timestamps', 'epoch', 'text', 'preprocessed_text', 'numeric_count', "total_count", "token_count"]] = df['text'].parallel_apply(lambda log: pd.Series(self.process_fn(log, self.timezone_dict, self.master_timestamp_list, self.master_format_list)))
+            log_results = df['text'].parallel_apply(lambda log: self.process_fn(log, self.timezone_dict, self.master_timestamp_list, self.master_format_list))
+            log_result_df = pd.DataFrame(
+                log_results.tolist(),
+                columns=['timestamps', 'epoch', 'text', 'preprocessed_text', 'numeric_count', 'total_count', 'token_count'],
+                index=df.index,
+            )
+            df[['timestamps', 'epoch', 'text', 'preprocessed_text', 'numeric_count', 'total_count', 'token_count']] = log_result_df
         else:
             df = pd.DataFrame({
                 'file_names': [],
@@ -939,8 +986,10 @@ class Preprocessing:
 
             df['z_score'] = (df['token_count'] - mean) / std_dev
             df['truncated_token_count'] = np.where(df['z_score'] > z_threshold, upper_bound, df['token_count'])
-            df['truncated_log'] = df.parallel_apply(
-                lambda row: row['text'][:upper_bound] if row['token_count'] > upper_bound else row['text'], axis=1
+            df['truncated_log'] = np.where(
+                df['token_count'] > upper_bound,
+                df['text'].str[:upper_bound],
+                df['text'],
             )
 
 
