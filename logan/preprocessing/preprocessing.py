@@ -12,13 +12,14 @@ import csv
 from pathlib import Path
 from tqdm import tqdm
 from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import patoolib
 from pandarallel import pandarallel
 import time
 import numpy as np
 from dateutil import parser as god_parse
 
-from logan.preprocessing import file_utils, pyrbras
+from logan.preprocessing import pyrbras
 
 # Global variables
 rbr = None
@@ -28,8 +29,8 @@ is_initialized = False
 DEFAULT_CONFIG = "config.ini"
 DEFAULT_CONFIG_SECTION = "preprocessing"
 
-# Initialize pandarallel
-pandarallel.initialize(progress_bar=True, nb_workers=min(os.cpu_count() or 2, 4))
+# Initialize pandarallel — use all available cores, disable progress bar to reduce overhead
+pandarallel.initialize(progress_bar=False, nb_workers=os.cpu_count() or 2)
 
 def initialize_once():
     """
@@ -56,6 +57,8 @@ class Preprocessing:
         self.split_pattern = re.compile(r'(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])')
         self.whitespace_pattern = re.compile(r'\s+')
         self.continuos_spaces = re.compile(r'[^\S\n]+')
+        self._non_alpha_pattern = re.compile(r'[^a-zA-Z]')
+        self._non_digit_pattern = re.compile(r'[^0-9]')
         self.z_threshold = 2
         self.master_timestamp_list, self.master_format_list = self.get_master_lists()
 
@@ -114,6 +117,30 @@ class Preprocessing:
 
         return master_timestamp_list, master_format_list
 
+    def _reorder_patterns_by_frequency(self, sample_texts):
+        """
+        Samples log lines to detect the dominant timestamp patterns, then reorders
+        master_timestamp_list / master_format_list so the most-frequently-matched
+        patterns are tried first.  Uses a stable sort so patterns with equal hit
+        counts keep their original length-descending order.
+        """
+        hit_counts = [0] * len(self.master_timestamp_list)
+
+        for log in sample_texts:
+            for idx, pattern in enumerate(self.master_timestamp_list):
+                if re.search(pattern, log):
+                    hit_counts[idx] += 1
+                    break
+
+        # Stable sort: most-hit patterns first; ties preserve original order (longest first)
+        indices = sorted(
+            range(len(hit_counts)),
+            key=lambda i: hit_counts[i],
+            reverse=True,
+        )
+        self.master_timestamp_list = [self.master_timestamp_list[i] for i in indices]
+        self.master_format_list = [self.master_format_list[i] for i in indices]
+
     def count_alphabets_and_digits(self, logline):
         """
         counts the number of occurences of alphabets and numbers in a given logline
@@ -124,8 +151,8 @@ class Preprocessing:
             alphabet-count (int)
             digit-count (int)
         """
-        alphabet_count = sum(c.isalpha() for c in logline)
-        digit_count = sum(c.isdigit() for c in logline)
+        alphabet_count = len(self._non_alpha_pattern.sub('', logline))
+        digit_count = len(self._non_digit_pattern.sub('', logline))
         return alphabet_count, digit_count
 
     def preprocess_logs(self, logs):
@@ -140,34 +167,23 @@ class Preprocessing:
         logs = logs.lower().strip()
         return logs
 
-    def compute_preprocessing_statistics(self, all_files, num_log_lines_processed, time, output_dir):
+    def compute_preprocessing_statistics(self, num_log_lines_processed, time_ms, output_dir, file_stats):
         """
-        computes statistics of preprocessing code
+        computes statistics of preprocessing code using pre-collected file stats
         
         Args:
-            all_files (list): list of files processed
-            num_log_lines (int): number of logs processed.
-            time (int): time took to performe preprocessing.
-            output_dir (str): serialized json object as a string.
+            num_log_lines_processed (int): number of logs processed.
+            time_ms (float): time took to perform preprocessing in milliseconds.
+            output_dir (str): output directory path.
+            file_stats (dict): pre-collected stats with 'total_size_bytes' and 'num_log_lines_total'.
         Returns:
             None
         """
-        total_size_bytes = 0
-        num_log_lines_total = 0
-        num_log_lines_whitespaces = 0
-
-        # Calculate file statistics
-        for fp in all_files:
-            total_size_bytes += os.path.getsize(fp)
-            num_log_lines_total += file_utils.count_file_lines(fp)
-            num_log_lines_whitespaces += file_utils.count_file_line_whitespaces(fp)
-
         metrics = {
-            'file_size_bytes': total_size_bytes,
+            'file_size_bytes': file_stats['total_size_bytes'],
             'num_log_lines_processed': num_log_lines_processed,
-            "num_log_lines_total": num_log_lines_total,
-            "num_log_lines_whitespaces": num_log_lines_whitespaces,
-            'preprocessing_time_ms': time
+            "num_log_lines_total": file_stats['num_log_lines_total'],
+            'preprocessing_time_ms': time_ms
         }
 
         with open(os.path.join(output_dir, "metrics", "preprocessing.json"), 'w') as writer:
@@ -213,7 +229,8 @@ class Preprocessing:
 
     def detect_jsons(self, logs):
         """
-        For a given list of logs, this fucntion finds the logs which are json objects or multiline logs
+        For a given list of logs, this function finds the logs which are json objects or multiline logs.
+        Uses a quick prefix check to avoid expensive json.loads on non-JSON lines.
         
         Args:
             logs (list): list of logs
@@ -224,20 +241,40 @@ class Preprocessing:
         multiline_logs, json_logs = [], []
 
         for log in logs:
-            try:
-                json_object = json.loads(log)
-                if self.is_valid_json_object(json_object):
-                    json_logs.append(json_object)
-                else:
+            stripped = log.lstrip()
+            if stripped and stripped[0] == '{':
+                try:
+                    json_object = json.loads(log)
+                    if self.is_valid_json_object(json_object):
+                        json_logs.append(json_object)
+                    else:
+                        multiline_logs.append(log)
+                except (json.JSONDecodeError, ValueError):
                     multiline_logs.append(log)
-            except Exception as e:
+            else:
                 multiline_logs.append(log)
 
         return multiline_logs, json_logs
 
+    def _read_single_file(self, file):
+        """
+        Read a single file and separate its lines into multiline logs and JSON objects.
+        Thread-safe: only reads instance state, never mutates it.
+
+        Returns:
+            tuple: (file_path, size_bytes, line_count, multiline_logs, json_logs)
+        """
+        size = os.path.getsize(file)
+        with open(file, "r", encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()
+        multiline_logs, json_logs = self.detect_jsons(lines)
+        return file, size, len(lines), multiline_logs, json_logs
+
     def process_files(self, file_list):
         """
-        For a given list of file, this fucntion outputs two dataframe one for multiline logs and another for json objects
+        For a given list of file, this function outputs two dataframes one for multiline logs and another for json objects.
+        Also collects file stats (size, line count) during the read to avoid a second pass.
+        Uses threaded parallel I/O to read multiple files concurrently.
         
         Args:
             file_list (list): list of input file paths
@@ -249,17 +286,28 @@ class Preprocessing:
         json_logs_list = []
         file_names_multiline = []
         file_names_json = []
-        
-        for file in tqdm(file_list):
-            with open(file, "r", encoding='utf-8', errors='ignore') as f:
-                lines = f.readlines()
-                multiline_logs, json_logs = self.detect_jsons(lines)
+        total_size_bytes = 0
+        num_log_lines_total = 0
+
+        max_workers = min(len(file_list), os.cpu_count() or 4, 16)
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(self._read_single_file, f): f for f in file_list}
+            for future in tqdm(as_completed(futures), total=len(futures)):
+                file, size, line_count, multiline_logs, json_logs = future.result()
+                total_size_bytes += size
+                num_log_lines_total += line_count
 
                 logs.extend(multiline_logs)
                 json_logs_list.extend(json_logs)
 
                 file_names_multiline.extend([file] * len(multiline_logs))
                 file_names_json.extend([file] * len(json_logs))
+
+        self._file_stats = {
+            'total_size_bytes': total_size_bytes,
+            'num_log_lines_total': num_log_lines_total,
+        }
 
         multiline_df = pd.DataFrame({"text": logs, "file_names": file_names_multiline})
         json_df = pd.DataFrame({"text": json_logs_list, "file_names": file_names_json})
@@ -556,27 +604,34 @@ class Preprocessing:
                     date_obj, future_flag = self.day_of_the_year(match_original)
                     return match_output, date_obj.timestamp(), future_flag
 
+                parsed_date = None
+                # Fast path: strptime with the known format (~5-10x faster than dateutil)
                 try:
-                    parsed_date = god_parse.parse(match, tzinfos=timezone_dict)
-                except:
+                    parsed_date = datetime.strptime(match, format)
+                except (ValueError, TypeError):
+                    # Strip timezone abbreviation and retry strptime
+                    clean_match = match
                     found_zone = False
-                    for z, timezone in timezone_dict.items():
-                        if z in match:
-                            match = match.replace(z, "").strip()
-                            tz = pytz.timezone(timezone)
+                    tz_obj = None
+                    for z, tz_name in timezone_dict.items():
+                        if z in clean_match:
+                            clean_match = clean_match.replace(z, "").strip()
+                            tz_obj = pytz.timezone(tz_name)
                             found_zone = True
                             break
-                    
-                    match = re.sub(r"[A-Za-z]+$", "", match).strip()                  
+                    if not found_zone:
+                        clean_match = re.sub(r"[A-Za-z]+$", "", clean_match).strip()
                     try:
-                        parsed_date = datetime.strptime(match, format)
+                        parsed_date = datetime.strptime(clean_match, format)
                         if found_zone:
-                            parsed_date = tz.localize(parsed_date)
-                        else:
-                            gmt = pytz.timezone('GMT')
-                            parsed_date = parsed_date.astimezone(gmt)
-                    except Exception:
-                        continue
+                            parsed_date = tz_obj.localize(parsed_date)
+                    except (ValueError, TypeError):
+                        # Last resort: flexible dateutil parser
+                        try:
+                            parsed_date = god_parse.parse(match, tzinfos=timezone_dict)
+                        except Exception:
+                            continue
+
                 if parsed_date is None:
                     return match_output, None, False
                 
@@ -805,10 +860,16 @@ class Preprocessing:
         # Process the log files and get dataframes for logs and JSON objects
         df, df_json = self.process_files(files_to_process)
 
-        # Process JSON data in parallel
+        # Process JSON data in parallel (return tuples, build DataFrame once — avoids per-row pd.Series overhead)
         df_json = df_json.dropna()
         if len(df_json) > 0:
-            df_json[['timestamps', 'epoch', 'text', 'preprocessed_text', 'numeric_count', "total_count", "token_count", "discarded"]] = df_json['text'].parallel_apply(lambda json_obj: pd.Series(self.process_fn_json(json_obj)))
+            json_results = df_json['text'].parallel_apply(lambda json_obj: self.process_fn_json(json_obj))
+            json_result_df = pd.DataFrame(
+                json_results.tolist(),
+                columns=['timestamps', 'epoch', 'text', 'preprocessed_text', 'numeric_count', 'total_count', 'token_count', 'discarded'],
+                index=df_json.index,
+            )
+            df_json[['timestamps', 'epoch', 'text', 'preprocessed_text', 'numeric_count', 'total_count', 'token_count', 'discarded']] = json_result_df
         else:
             df_json = pd.DataFrame({
                 'timestamps': [],
@@ -831,10 +892,23 @@ class Preprocessing:
         df_json = df_json.drop(columns=["discarded"])
 
         print(f"Debug mode is set to: {self.debug_mode}")
-        # Process multiline log data in parallel
+
+        # Detect dominant timestamp patterns from a sample and reorder for fast matching
+        if len(df) > 0:
+            sample_size = min(200, len(df))
+            sample_indices = np.linspace(0, len(df) - 1, sample_size, dtype=int)
+            self._reorder_patterns_by_frequency(df['text'].iloc[sample_indices].tolist())
+
+        # Process multiline log data in parallel (return tuples, build DataFrame once — avoids per-row pd.Series overhead)
         print("Starting pandarallel for log processing")
         if len(df) > 0:
-            df[['timestamps', 'epoch', 'text', 'preprocessed_text', 'numeric_count', "total_count", "token_count"]] = df['text'].parallel_apply(lambda log: pd.Series(self.process_fn(log, self.timezone_dict, self.master_timestamp_list, self.master_format_list)))
+            log_results = df['text'].parallel_apply(lambda log: self.process_fn(log, self.timezone_dict, self.master_timestamp_list, self.master_format_list))
+            log_result_df = pd.DataFrame(
+                log_results.tolist(),
+                columns=['timestamps', 'epoch', 'text', 'preprocessed_text', 'numeric_count', 'total_count', 'token_count'],
+                index=df.index,
+            )
+            df[['timestamps', 'epoch', 'text', 'preprocessed_text', 'numeric_count', 'total_count', 'token_count']] = log_result_df
         else:
             df = pd.DataFrame({
                 'file_names': [],
@@ -930,8 +1004,10 @@ class Preprocessing:
 
             df['z_score'] = (df['token_count'] - mean) / std_dev
             df['truncated_token_count'] = np.where(df['z_score'] > z_threshold, upper_bound, df['token_count'])
-            df['truncated_log'] = df.parallel_apply(
-                lambda row: row['text'][:upper_bound] if row['token_count'] > upper_bound else row['text'], axis=1
+            df['truncated_log'] = np.where(
+                df['token_count'] > upper_bound,
+                df['text'].str[:upper_bound],
+                df['text'],
             )
 
 
@@ -979,12 +1055,12 @@ class Preprocessing:
         print("Min epoch (human-readable):", min_readable)
         print("Max epoch (human-readable):", max_readable)
 
-        # Save preprocessing statistics and final DataFrame
+        # Save preprocessing statistics using pre-collected file stats from process_files
         self.compute_preprocessing_statistics(
-            files_to_process, 
             len(df), 
             (time.time() - start_time) * 1000, 
-            output_dir
+            output_dir,
+            self._file_stats
         )
         self.df = df  # Store the final processed logs DataFrame in the class instance.
         if (self.debug_mode == "true"):

@@ -319,15 +319,30 @@ class Core:
         temp_id_to_rep_log = {tid: {file_name: logs[0]} for tid, file_name, logs in zip(temp_ids, file_names, rep_lol)}
         del rep_lol, temp_ids, file_names, gs_list, fault_list, logs_for_fcp
 
-        # Backtracking GS and Fault Labels
+        # Backtracking GS and Fault Labels (vectorized via list comprehension + direct assignment)
         print("Backtracking GS and Fault Labels")
         start_time = time.time()
-        apply_func = self.backprop_gs_fault_with_temp_ids
-        df_inference_csv[['golden_signal', 'text_output']] = df_inference_csv.progress_apply(apply_func, axis=1, mapping=temp_id_to_signal_map)
+
+        keys = list(zip(df_inference_csv['test_ids'], df_inference_csv['file_names']))
+        default_val = ('Info', [['other']])
+        lookups = [temp_id_to_signal_map.get(k, default_val) for k in keys]
+
+        gs_col = [v[0] for v in lookups]
+        fault_col = [v[1] for v in lookups]
+
+        logs_escaped = df_inference_csv['text'].str.replace("\n", "&#13;&#10;", regex=False)
+        df_inference_csv['golden_signal'] = gs_col
+        df_inference_csv['text_output'] = logs_escaped + " => Fault-Categories: " + pd.Series([str(f[0]) if isinstance(f, list) and f else str(f) for f in fault_col], index=df_inference_csv.index) + " => Golden-Signal: " + pd.Series(gs_col, index=df_inference_csv.index)
+
+        del keys, lookups, gs_col, fault_col, logs_escaped
         print(f"Backtracking completed in: {time.time() - start_time} seconds")
 
         df_inference_csv['test_ids'] = df_inference_csv['test_ids'].astype(str)
-        df_inference_csv['error_test_ids'] = df_inference_csv.apply(lambda row: row['test_ids'] if row['golden_signal'] != 'Info' else 'info', axis=1)
+        df_inference_csv['error_test_ids'] = np.where(
+            df_inference_csv['golden_signal'] != 'Info',
+            df_inference_csv['test_ids'],
+            'info'
+        )
 
         df_inference_csv_only_non_info = df_inference_csv[df_inference_csv['golden_signal'] != "Info"].copy()
         print("Data Frame Only Non-Information is as follows=>")
