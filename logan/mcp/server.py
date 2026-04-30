@@ -61,6 +61,7 @@ class _ServerState:
 @asynccontextmanager
 async def _lifespan(server: FastMCP):
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
+    os.environ["LOGAN_DISABLE_PANDARALLEL"] = "1"
     state = _ServerState()
     try:
         yield state
