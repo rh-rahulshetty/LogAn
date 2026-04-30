@@ -342,7 +342,7 @@
         }
     }
 
-    const GS_COLORS = {
+    var KNOWN_GS_COLORS = {
         error: '#c9190b',
         latency: '#ec7a08',
         saturation: '#6a4f9c',
@@ -350,14 +350,28 @@
         availability: '#3e8635',
         information: '#6a6e73'
     };
+    var EXTRA_PALETTE = [
+        '#009596', '#a2d9d9', '#f4c145', '#b8860b',
+        '#8b008b', '#2e8b57', '#cd5c5c', '#4682b4',
+        '#da70d6', '#20b2aa', '#ff6347', '#708090'
+    ];
+
+    function getSignalColor(sig, extraIdx) {
+        var key = sig.toLowerCase();
+        if (KNOWN_GS_COLORS[key]) return KNOWN_GS_COLORS[key];
+        return EXTRA_PALETTE[extraIdx % EXTRA_PALETTE.length];
+    }
 
     var timelineChart = null;
     var timelineRawData = null;
     var timelineScaledMode = true;
 
     function buildTimelineDatasets(data, scaled) {
-        var signals = data.signals || Object.keys(GS_COLORS);
+        var signals = data.signals || [];
+        var extraIdx = 0;
         return signals.map(function(sig) {
+            var color = getSignalColor(sig, extraIdx);
+            if (!KNOWN_GS_COLORS[sig.toLowerCase()]) extraIdx++;
             return {
                 label: sig.charAt(0).toUpperCase() + sig.slice(1),
                 data: data.bins.map(function(b) {
@@ -366,7 +380,7 @@
                     return Math.round(Math.log10(val + 1) * 100) / 100;
                 }),
                 rawData: data.bins.map(function(b) { return b[sig] || 0; }),
-                backgroundColor: GS_COLORS[sig] || '#999',
+                backgroundColor: color,
                 borderWidth: 0
             };
         });

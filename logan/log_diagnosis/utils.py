@@ -272,9 +272,8 @@ def compute_golden_signal_timeline(df_for_anomaly_html, output_dir):
     import math
     from datetime import datetime, timezone
 
-    SIGNALS = ["error", "latency", "saturation", "traffic", "availability", "information"]
     output_path = os.path.join(output_dir, "developer_debug_files", "golden_signal_timeline.json")
-    empty_result = {"bin_seconds": 0, "bin_label": "", "signals": SIGNALS, "bins": []}
+    empty_result = {"bin_seconds": 0, "bin_label": "", "signals": [], "bins": []}
 
     if df_for_anomaly_html is None or df_for_anomaly_html.empty:
         with open(output_path, "w") as f:
@@ -309,6 +308,8 @@ def compute_golden_signal_timeline(df_for_anomaly_html, output_dir):
 
     bin_label = INTERVAL_LABELS.get(bin_seconds, f"{bin_seconds // 3600} hours")
 
+    # Discover all signals from the data
+    all_signals = set()
     bin_counts = {}
     for _, row in df_for_anomaly_html.iterrows():
         epoch_val = row.get("epoch")
@@ -318,16 +319,22 @@ def compute_golden_signal_timeline(df_for_anomaly_html, output_dir):
         bin_idx = int((float(epoch_val) - min_epoch) // bin_seconds)
         signals_in_row = gs_str.strip().split()
         if bin_idx not in bin_counts:
-            bin_counts[bin_idx] = {s: 0 for s in SIGNALS}
+            bin_counts[bin_idx] = {}
         for sig in signals_in_row:
             sig_lower = sig.lower().strip()
-            if sig_lower in bin_counts[bin_idx]:
-                bin_counts[bin_idx][sig_lower] += 1
+            if sig_lower:
+                all_signals.add(sig_lower)
+                bin_counts[bin_idx][sig_lower] = bin_counts[bin_idx].get(sig_lower, 0) + 1
 
     if not bin_counts:
         with open(output_path, "w") as f:
             json.dump(empty_result, f)
         return False
+
+    # Stable ordering: known signals first (in a sensible order), then extras alphabetically
+    KNOWN_ORDER = ["error", "latency", "saturation", "traffic", "availability", "information"]
+    signals = [s for s in KNOWN_ORDER if s in all_signals]
+    signals += sorted(all_signals - set(KNOWN_ORDER))
 
     max_bin_idx = max(bin_counts.keys())
     bins = []
@@ -340,16 +347,16 @@ def compute_golden_signal_timeline(df_for_anomaly_html, output_dir):
             label = dt.strftime("%Y-%m-%d %H:%M")
         else:
             label = dt.strftime("%m-%d %H:%M")
-        counts = bin_counts.get(i, {s: 0 for s in SIGNALS})
+        counts = bin_counts.get(i, {})
         bin_entry = {"start": bin_start, "label": label}
-        for s in SIGNALS:
+        for s in signals:
             bin_entry[s] = counts.get(s, 0)
         bins.append(bin_entry)
 
     result = {
         "bin_seconds": bin_seconds,
         "bin_label": bin_label,
-        "signals": SIGNALS,
+        "signals": signals,
         "bins": bins,
     }
     with open(output_path, "w") as f:
