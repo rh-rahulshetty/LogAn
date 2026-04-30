@@ -5,7 +5,7 @@ import time
 import csv
 from .core import Core
 from datetime import datetime
-from logan.log_diagnosis.utils import get_anomaly_html_str, get_summary_html_str
+from logan.log_diagnosis.utils import get_anomaly_html_str, get_summary_html_str, compute_golden_signal_timeline
 from logan.log_diagnosis.models import ModelManager, AllModels, ModelType
 
 class Anomaly(Core):
@@ -243,7 +243,10 @@ class Anomaly(Core):
             df_inference_csv, MODEL_GS, MODEL_FAULT_CATEGORY, BATCH_SIZE
         )
         print("ended the preprocessing of input data")
-        
+
+        # Compute golden signal timeline for the summary chart
+        has_timeline_data = compute_golden_signal_timeline(df_for_anomaly_html, output_dir)
+
         # Log template and signal map debug files
         debug_file_path = os.path.join(developer_debug_dir, "temp_id_to_rep_log.json")  
         if (self.debug_mode == "true"):
@@ -317,7 +320,7 @@ class Anomaly(Core):
             f.write(html_table)
 
         # Generate the HTML table for the summary report
-        html_table = get_summary_html_str(df_for_summary_html, include_golden_signal_dropdown=True, ignored_file_list=ignored_files, processed_file_list=processsed_files, output_dir=output_dir)
+        html_table = get_summary_html_str(df_for_summary_html, include_golden_signal_dropdown=True, ignored_file_list=ignored_files, processed_file_list=processsed_files, output_dir=output_dir, has_timeline_data=has_timeline_data)
         with open(os.path.join(log_diagnosis_dir, "summary.html"), "w") as f:
             f.write(html_table)
 

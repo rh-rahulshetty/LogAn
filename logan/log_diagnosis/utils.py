@@ -207,7 +207,7 @@ def _load_preprocessing_metrics(output_dir):
         return None, None, None
 
 
-def get_summary_html_str(df_for_summary_html, include_golden_signal_dropdown, ignored_file_list, processed_file_list, output_dir=None):
+def get_summary_html_str(df_for_summary_html, include_golden_signal_dropdown, ignored_file_list, processed_file_list, output_dir=None, has_timeline_data=False):
     """
     Generates an HTML string for the summary report, including details about golden signals and processed files.
 
@@ -238,9 +238,17 @@ def get_summary_html_str(df_for_summary_html, include_golden_signal_dropdown, ig
     env = Environment(loader=FileSystemLoader(os.path.join(path, 'templates')))
     html_template = env.get_template('summary_golden_signal_error.html')
 
+    # Convert to native Python types so Jinja2 renders valid JS literals (not np.str_)
+    import numpy as np
+    def _to_native(v):
+        if isinstance(v, (np.generic,)):
+            return v.item()
+        return v
+    summary_table = [[_to_native(v) for v in row] for row in df_for_summary_html.values.tolist()]
+
     # Render the summary HTML template.
     rendered_template = html_template.render(
-        summary_table=df_for_summary_html.values.tolist(),
+        summary_table=summary_table,
         include_golden_signal_dropdown=include_golden_signal_dropdown,
         ignored_file_list=ignored_file_list,
         processed_file_list=processed_file_list,
@@ -249,9 +257,113 @@ def get_summary_html_str(df_for_summary_html, include_golden_signal_dropdown, ig
         num_log_lines_display=num_log_lines_display,
         file_size_bytes=file_size_bytes,
         file_size_display=file_size_display,
+        has_timeline_data=has_timeline_data,
     )
 
     return rendered_template
+
+def compute_golden_signal_timeline(df_for_anomaly_html, output_dir):
+    """
+    Compute time-binned golden signal counts from the anomaly DataFrame and write
+    the result to output_dir/log_diagnosis/golden_signal_timeline.json.
+
+    Returns True if non-empty bins were written, False otherwise.
+    """
+    import math
+    from datetime import datetime, timezone
+
+    output_path = os.path.join(output_dir, "developer_debug_files", "golden_signal_timeline.json")
+    empty_result = {"bin_seconds": 0, "bin_label": "", "signals": [], "bins": []}
+
+    if df_for_anomaly_html is None or df_for_anomaly_html.empty:
+        with open(output_path, "w") as f:
+            json.dump(empty_result, f)
+        return False
+
+    epochs = df_for_anomaly_html["epoch"].dropna().values
+    if len(epochs) == 0:
+        with open(output_path, "w") as f:
+            json.dump(empty_result, f)
+        return False
+
+    min_epoch = float(epochs.min())
+    max_epoch = float(epochs.max())
+    time_span = max_epoch - min_epoch
+
+    CANDIDATE_INTERVALS = [30, 60, 300, 900, 1800, 3600, 21600, 86400]
+    INTERVAL_LABELS = {
+        30: "30 sec", 60: "1 min", 300: "5 min", 900: "15 min",
+        1800: "30 min", 3600: "1 hour", 21600: "6 hours", 86400: "1 day",
+    }
+    TARGET_MAX_BINS = 100
+
+    bin_seconds = CANDIDATE_INTERVALS[-1]
+    for candidate in CANDIDATE_INTERVALS:
+        num_bins = max(1, math.ceil(time_span / candidate)) if time_span > 0 else 1
+        if num_bins <= TARGET_MAX_BINS:
+            bin_seconds = candidate
+            break
+    else:
+        bin_seconds = max(3600, math.ceil(time_span / TARGET_MAX_BINS / 3600) * 3600)
+
+    bin_label = INTERVAL_LABELS.get(bin_seconds, f"{bin_seconds // 3600} hours")
+
+    # Discover all signals from the data
+    all_signals = set()
+    bin_counts = {}
+    for _, row in df_for_anomaly_html.iterrows():
+        epoch_val = row.get("epoch")
+        gs_str = row.get("golden_signal", "")
+        if pd.isna(epoch_val) or not gs_str:
+            continue
+        bin_idx = int((float(epoch_val) - min_epoch) // bin_seconds)
+        signals_in_row = gs_str.strip().split()
+        if bin_idx not in bin_counts:
+            bin_counts[bin_idx] = {}
+        for sig in signals_in_row:
+            sig_lower = sig.lower().strip()
+            if sig_lower:
+                all_signals.add(sig_lower)
+                bin_counts[bin_idx][sig_lower] = bin_counts[bin_idx].get(sig_lower, 0) + 1
+
+    if not bin_counts:
+        with open(output_path, "w") as f:
+            json.dump(empty_result, f)
+        return False
+
+    # Stable ordering: known signals first (in a sensible order), then extras alphabetically
+    KNOWN_ORDER = ["error", "latency", "saturation", "traffic", "availability", "information"]
+    signals = [s for s in KNOWN_ORDER if s in all_signals]
+    signals += sorted(all_signals - set(KNOWN_ORDER))
+
+    max_bin_idx = max(bin_counts.keys())
+    bins = []
+    for i in range(max_bin_idx + 1):
+        bin_start = min_epoch + i * bin_seconds
+        dt = datetime.fromtimestamp(bin_start, tz=timezone.utc)
+        if bin_seconds >= 86400:
+            label = dt.strftime("%Y-%m-%d")
+        elif bin_seconds >= 3600:
+            label = dt.strftime("%Y-%m-%d %H:%M")
+        else:
+            label = dt.strftime("%m-%d %H:%M")
+        counts = bin_counts.get(i, {})
+        bin_entry = {"start": bin_start, "label": label}
+        for s in signals:
+            bin_entry[s] = counts.get(s, 0)
+        bins.append(bin_entry)
+
+    result = {
+        "bin_seconds": bin_seconds,
+        "bin_label": bin_label,
+        "signals": signals,
+        "bins": bins,
+    }
+    with open(output_path, "w") as f:
+        json.dump(result, f, indent=2)
+
+    return True
+
 
 def prepare_output_dir(output_dir: str, clean_up: bool = False):
     """
