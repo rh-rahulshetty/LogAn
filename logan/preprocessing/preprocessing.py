@@ -29,8 +29,19 @@ is_initialized = False
 DEFAULT_CONFIG = "config.ini"
 DEFAULT_CONFIG_SECTION = "preprocessing"
 
-# Initialize pandarallel — use all available cores, disable progress bar to reduce overhead
-pandarallel.initialize(progress_bar=False, nb_workers=os.cpu_count() or 2)
+_pandarallel_initialized = False
+_pandarallel_disabled = False
+
+def _ensure_pandarallel():
+    global _pandarallel_initialized, _pandarallel_disabled
+    if _pandarallel_initialized:
+        return
+    if os.environ.get("LOGAN_DISABLE_PANDARALLEL") == "1":
+        _pandarallel_disabled = True
+        _pandarallel_initialized = True
+        return
+    pandarallel.initialize(progress_bar=False, nb_workers=os.cpu_count() or 2)
+    _pandarallel_initialized = True
 
 def initialize_once():
     """
@@ -863,7 +874,9 @@ class Preprocessing:
         # Process JSON data in parallel (return tuples, build DataFrame once — avoids per-row pd.Series overhead)
         df_json = df_json.dropna()
         if len(df_json) > 0:
-            json_results = df_json['text'].parallel_apply(lambda json_obj: self.process_fn_json(json_obj))
+            _ensure_pandarallel()
+            apply_fn = df_json['text'].apply if _pandarallel_disabled else df_json['text'].parallel_apply
+            json_results = apply_fn(lambda json_obj: self.process_fn_json(json_obj))
             json_result_df = pd.DataFrame(
                 json_results.tolist(),
                 columns=['timestamps', 'epoch', 'text', 'preprocessed_text', 'numeric_count', 'total_count', 'token_count', 'discarded'],
@@ -902,7 +915,9 @@ class Preprocessing:
         # Process multiline log data in parallel (return tuples, build DataFrame once — avoids per-row pd.Series overhead)
         print("Starting pandarallel for log processing")
         if len(df) > 0:
-            log_results = df['text'].parallel_apply(lambda log: self.process_fn(log, self.timezone_dict, self.master_timestamp_list, self.master_format_list))
+            _ensure_pandarallel()
+            apply_fn = df['text'].apply if _pandarallel_disabled else df['text'].parallel_apply
+            log_results = apply_fn(lambda log: self.process_fn(log, self.timezone_dict, self.master_timestamp_list, self.master_format_list))
             log_result_df = pd.DataFrame(
                 log_results.tolist(),
                 columns=['timestamps', 'epoch', 'text', 'preprocessed_text', 'numeric_count', 'total_count', 'token_count'],

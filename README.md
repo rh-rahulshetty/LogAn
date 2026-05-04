@@ -88,6 +88,56 @@ uv run logan view -d "tmp/output"
 # server should be available at http://localhost:8000/log_diagnosis
 ``` 
 
+## MCP Server (for AI Agents)
+
+LogAn exposes its analysis capabilities via the [Model Context Protocol (MCP)](https://modelcontextprotocol.io), allowing AI agents (Claude Desktop, Claude Code, custom agents) to analyze logs programmatically.
+
+### Setup
+
+```bash
+# Install with MCP dependencies
+uv pip install -e ".[mcp]"
+```
+
+### Running the Server
+
+```bash
+# stdio transport (for Claude Desktop / Claude Code)
+logan-mcp
+
+# HTTP transport (for remote agents)
+logan-mcp --transport streamable-http
+```
+
+Analysis results are stored in `~/.logan/runs/<timestamp>/` by default.
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `analyze_logs` | Run the full analysis pipeline (preprocessing, Drain3 templatization, anomaly detection). Returns each unique log template with its representative log line, golden signal, fault categories, and occurrence count. |
+| `extract_templates` | Extract unique log patterns via Drain3 without ML classification. Fast (seconds) — useful for quickly understanding log structure before deciding to run full analysis. |
+
+### Claude Desktop Configuration
+
+Add to your Claude Desktop config (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "logan": {
+      "command": "logan-mcp"
+    }
+  }
+}
+```
+
+### Testing with MCP Inspector
+
+```bash
+mcp dev logan/mcp/server.py
+```
+
 ## Examples
 
 Check out [tutorials](./examples/tutorials/) for more examples on advanced usages.

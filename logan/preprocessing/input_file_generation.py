@@ -8,7 +8,19 @@ import json
 import csv
 from pathlib import Path
 
-pandarallel.initialize(progress_bar=False)
+_pandarallel_initialized = False
+_pandarallel_disabled = False
+
+def _ensure_pandarallel():
+    global _pandarallel_initialized, _pandarallel_disabled
+    if _pandarallel_initialized:
+        return
+    if os.environ.get("LOGAN_DISABLE_PANDARALLEL") == "1":
+        _pandarallel_disabled = True
+        _pandarallel_initialized = True
+        return
+    pandarallel.initialize(progress_bar=False)
+    _pandarallel_initialized = True
 tqdm.pandas()
 
 def get_start_end(start_str, duration):
