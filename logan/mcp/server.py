@@ -12,12 +12,9 @@ from logan.mcp.stdout_guard import suppress_stdout
 
 logger = logging.getLogger("logan.mcp")
 
-DEFAULT_LOGAN_HOME = os.path.join(Path.home(), ".logan")
-
-
 def _default_output_dir() -> str:
-    """Return a timestamped output directory under LOGAN_OUTPUT_DIR or ~/.logan/runs/."""
-    base = os.environ.get("LOGAN_OUTPUT_DIR", os.path.join(DEFAULT_LOGAN_HOME, "runs"))
+    """Return a timestamped output directory under ~/.logan/runs/."""
+    base = os.path.join(Path.home(), ".logan", "runs")
     run_name = datetime.now().strftime("%Y%m%d_%H%M%S")
     return os.path.join(base, run_name)
 
@@ -61,6 +58,8 @@ class _ServerState:
 @asynccontextmanager
 async def _lifespan(server: FastMCP):
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
+    # Pandarallel uses multiprocessing.fork() from within executor threads,
+    # which is unsafe in a multi-threaded asyncio process and causes deadlocks.
     os.environ["LOGAN_DISABLE_PANDARALLEL"] = "1"
     state = _ServerState()
     try:
@@ -77,9 +76,9 @@ mcp = FastMCP(
     "logan",
     instructions=(
         "LogAn is an intelligent log analysis tool. Use analyze_logs to run "
-        "the full pipeline on log files. Use get_run_summary to retrieve "
-        "structured results from a completed run. Use read_log_sample to "
-        "peek at raw log file contents."
+        "the full pipeline on log files and get golden signal classifications. "
+        "Use extract_templates to quickly find unique log patterns via Drain3 "
+        "without ML classification."
     ),
     lifespan=_lifespan,
 )
@@ -115,37 +114,6 @@ def _read_json_file(path: str):
     return None
 
 
-def _collect_results(output_dir: str) -> dict:
-    """Read metrics and structured data written by the pipeline."""
-    results = {}
-
-    for name in ("preprocessing", "drain", "anomaly"):
-        data = _read_json_file(os.path.join(output_dir, "metrics", f"{name}.json"))
-        if data:
-            results[f"{name}_metrics"] = data
-
-    timeline = _read_json_file(
-        os.path.join(output_dir, "developer_debug_files", "golden_signal_timeline.json")
-    )
-    if timeline:
-        results["golden_signal_timeline"] = timeline
-
-    signal_map = _read_json_file(
-        os.path.join(output_dir, "developer_debug_files", "temp_id_to_signal_map.json")
-    )
-    if signal_map:
-        results["template_signal_map"] = signal_map
-
-    anomaly_html = os.path.join(output_dir, "log_diagnosis", "anomalies.html")
-    summary_html = os.path.join(output_dir, "log_diagnosis", "summary.html")
-    results["report_paths"] = {
-        "anomalies_html": anomaly_html if os.path.isfile(anomaly_html) else None,
-        "summary_html": summary_html if os.path.isfile(summary_html) else None,
-    }
-
-    return results
-
-
 # ---------------------------------------------------------------------------
 # Tool: analyze_logs
 # ---------------------------------------------------------------------------
@@ -167,15 +135,16 @@ async def analyze_logs(
     """Run the full LogAn analysis pipeline on log files.
 
     Performs preprocessing, Drain3 templatization, and ML-based anomaly
-    detection (golden signals + fault categories). Generates HTML reports
-    and returns structured results.
+    detection (golden signals + fault categories). Returns each unique
+    log template with its representative log line, golden signal, fault
+    categories, and occurrence count.
 
     Model loading on the first call may take 30-60 seconds; subsequent
     calls reuse the cached model.
 
     Args:
         files: Paths to log files or directories to analyze.
-        output_dir: Directory where reports and artifacts are written. Defaults to ~/.logan/runs/<timestamp>. Override the base path with the LOGAN_OUTPUT_DIR environment variable.
+        output_dir: Directory where reports and artifacts are written. Defaults to ~/.logan/runs/<timestamp>.
         time_range: Time range filter. Options: all-data, 1-day, 2-day, ..., 1-week, 2-week, 1-month.
         model_type: Model type for classification. Options: zero_shot, similarity, custom.
         model: Model name. Built-in: crossencoder, bart. Or a HuggingFace model name.
@@ -191,7 +160,6 @@ async def analyze_logs(
     if not output_dir:
         output_dir = _default_output_dir()
 
-    # Validate inputs
     for f in files:
         if not os.path.exists(f):
             return {"status": "error", "message": f"File not found: {f}"}
@@ -200,7 +168,6 @@ async def analyze_logs(
     resolved_model = _resolve_model(model)
     debug_str = "true" if debug_mode else "false"
 
-    # Step 0: prepare output directory
     from logan.log_diagnosis.utils import prepare_output_dir
     prepare_output_dir(output_dir, clean_up)
 
@@ -226,7 +193,7 @@ async def analyze_logs(
             "message": "No log lines could be extracted from the input files.",
         }
 
-    log_lines = len(df)
+    total_log_lines = len(df)
 
     # Step 2: Drain3 templatization
     await ctx.report_progress(1, 3)
@@ -246,7 +213,7 @@ async def analyze_logs(
         return templatizer.df
 
     templatized_df = await loop.run_in_executor(None, _run_drain)
-    template_count = templatized_df["test_ids"].nunique() if "test_ids" in templatized_df.columns else 0
+    templates_found = templatized_df["test_ids"].nunique() if "test_ids" in templatized_df.columns else 0
 
     # Step 3: anomaly detection
     await ctx.report_progress(2, 3)
@@ -268,96 +235,172 @@ async def analyze_logs(
 
     await ctx.report_progress(3, 3)
 
-    results = _collect_results(output_dir)
+    # Build structured results from the signal map written by the pipeline
+    signal_map = _read_json_file(
+        os.path.join(output_dir, "developer_debug_files", "temp_id_to_signal_map.json")
+    )
 
-    # Summarize golden signal distribution from timeline data
+    # Build per-template results using the summary: representative log line,
+    # golden signal, fault categories, occurrence count.
+    # The summary DataFrame was rendered into the HTML report; we reconstruct
+    # from the templatized_df which is still in memory.
     gs_distribution = {}
-    timeline = results.get("golden_signal_timeline", {})
-    for bin_entry in timeline.get("bins", []):
-        for signal in timeline.get("signals", []):
-            gs_distribution[signal] = gs_distribution.get(signal, 0) + bin_entry.get(signal, 0)
+    results = []
+
+    if signal_map:
+        # signal_map keys are stringified tuples: "('tid', 'file_name')"
+        # Build occurrence counts from the templatized DataFrame
+        counts = templatized_df.groupby(["test_ids", "file_names"]).agg(
+            log_line=("text", "first"),
+            occurrences=("text", "size"),
+        ).reset_index()
+
+        for _, row in counts.iterrows():
+            tid = str(row["test_ids"])
+            fname = row["file_names"]
+            key = str((tid, fname))
+            gs, fault = signal_map.get(key, ["Info", ["other"]])
+
+            gs_distribution[gs] = gs_distribution.get(gs, 0) + int(row["occurrences"])
+
+            log_line = row["log_line"]
+            if isinstance(log_line, str):
+                log_line = log_line.replace("&#13;&#10;", "\n").strip()
+
+            results.append({
+                "template_id": tid,
+                "log_line": log_line,
+                "golden_signal": gs,
+                "fault_categories": fault[0] if isinstance(fault, list) and fault else fault,
+                "occurrences": int(row["occurrences"]),
+                "file_name": fname,
+            })
+
+        results.sort(key=lambda r: r["occurrences"], reverse=True)
 
     return {
         "status": "success",
-        "log_lines_processed": log_lines,
-        "templates_found": template_count,
+        "total_log_lines": total_log_lines,
+        "templates_found": templates_found,
         "golden_signal_distribution": gs_distribution,
-        **results,
+        "output_dir": output_dir,
+        "results": results,
     }
 
 
 # ---------------------------------------------------------------------------
-# Tool: get_run_summary
+# Tool: extract_templates
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-async def get_run_summary(output_dir: str) -> dict:
-    """Get structured results from a completed LogAn analysis run.
+async def extract_templates(
+    files: list[str],
+    output_dir: str = "",
+    time_range: str = "all-data",
+    process_all_files: bool = False,
+    process_log_files: bool = True,
+    process_txt_files: bool = False,
+    clean_up: bool = False,
+    ctx: Context = None,
+) -> dict:
+    """Extract unique log patterns from log files using Drain3 (no ML classification).
 
-    Returns metrics, golden signal timeline, template-to-signal mapping,
-    and report paths as structured JSON that agents can reason about.
+    Runs preprocessing and Drain3 templatization to identify recurring log
+    patterns. Fast (typically under a few seconds) — use this to quickly
+    understand log structure before deciding whether to run full analysis.
 
     Args:
-        output_dir: The output directory from a previous analyze_logs call.
+        files: Paths to log files or directories to process.
+        output_dir: Directory where artifacts are written. Defaults to ~/.logan/runs/<timestamp>. Override the base path with the LOGAN_OUTPUT_DIR environment variable.
+        time_range: Time range filter. Options: all-data, 1-day, 2-day, ..., 1-week, 2-week, 1-month.
+        process_all_files: Process all text-based files regardless of extension.
+        process_log_files: Process .log files found in directories.
+        process_txt_files: Process .txt files found in directories.
+        clean_up: Remove existing output_dir before running.
     """
-    if not os.path.isdir(output_dir):
-        return {"status": "error", "message": f"Directory not found: {output_dir}"}
+    loop = asyncio.get_event_loop()
 
-    log_diagnosis_dir = os.path.join(output_dir, "log_diagnosis")
-    if not os.path.isdir(log_diagnosis_dir):
+    if not output_dir:
+        output_dir = _default_output_dir()
+
+    for f in files:
+        if not os.path.exists(f):
+            return {"status": "error", "message": f"File not found: {f}"}
+
+    from logan.log_diagnosis.utils import prepare_output_dir
+    prepare_output_dir(output_dir, clean_up)
+
+    # Step 1: preprocessing
+    await ctx.report_progress(0, 2)
+    await ctx.info("Preprocessing log files...")
+
+    def _run_preprocessing():
+        from logan.preprocessing.preprocessing import Preprocessing
+        with suppress_stdout():
+            pp = Preprocessing("true")
+            pp.preprocess(
+                files, time_range, output_dir,
+                process_all_files, process_log_files, process_txt_files,
+            )
+        return pp.df
+
+    df = await loop.run_in_executor(None, _run_preprocessing)
+
+    if df is None or len(df) == 0:
         return {
             "status": "error",
-            "message": f"No analysis results found in {output_dir}. Run analyze_logs first.",
+            "message": "No log lines could be extracted from the input files.",
         }
 
-    results = _collect_results(output_dir)
+    total_log_lines = len(df)
 
-    gs_distribution = {}
-    timeline = results.get("golden_signal_timeline", {})
-    for bin_entry in timeline.get("bins", []):
-        for signal in timeline.get("signals", []):
-            gs_distribution[signal] = gs_distribution.get(signal, 0) + bin_entry.get(signal, 0)
+    # Step 2: Drain3 templatization
+    await ctx.report_progress(1, 2)
+    await ctx.info("Extracting log templates (Drain3)...")
 
-    return {"status": "success", "golden_signal_distribution": gs_distribution, **results}
+    def _run_drain():
+        from logan.drain.run_drain import Templatizer
+        from drain3.template_miner import TemplateMiner
+        from drain3.template_miner_config import TemplateMinerConfig
 
+        with suppress_stdout():
+            drain_config = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)), "drain", "drain3.ini"
+            )
+            templatizer = Templatizer(debug_mode="true", config_path=drain_config)
+            templatizer.miner(
+                df, output_dir,
+                os.path.join(output_dir, "test_templates", "tm-test.templates.json"),
+            )
 
-# ---------------------------------------------------------------------------
-# Tool: read_log_sample
-# ---------------------------------------------------------------------------
+            # Extract template patterns from Drain3's internal clusters
+            config = TemplateMinerConfig()
+            config.load(drain_config)
+            tm = TemplateMiner(config=config)
+            for log in df["truncated_log"].values:
+                tm.add_log_message(log)
+            clusters = tm.drain.clusters
 
-@mcp.tool()
-async def read_log_sample(
-    file_path: str,
-    num_lines: int = 50,
-    offset: int = 0,
-) -> dict:
-    """Read a sample of lines from a log file.
+        return templatizer.df, clusters
 
-    Useful for inspecting log format and content before running analysis.
+    templatized_df, clusters = await loop.run_in_executor(None, _run_drain)
 
-    Args:
-        file_path: Path to the log file.
-        num_lines: Number of lines to read (default 50).
-        offset: Line number to start reading from (0-based, default 0).
-    """
-    if not os.path.isfile(file_path):
-        return {"status": "error", "message": f"File not found: {file_path}"}
+    await ctx.report_progress(2, 2)
 
-    try:
-        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-            all_lines = f.readlines()
-    except OSError as e:
-        return {"status": "error", "message": f"Cannot read file: {e}"}
+    templates = []
+    for cluster in clusters:
+        templates.append({
+            "template_id": str(cluster.cluster_id),
+            "template": cluster.get_template(),
+            "occurrences": cluster.size,
+        })
 
-    total_lines = len(all_lines)
-    end = min(offset + num_lines, total_lines)
-    selected = [line.rstrip("\n\r") for line in all_lines[offset:end]]
+    templates.sort(key=lambda t: t["occurrences"], reverse=True)
 
     return {
         "status": "success",
-        "file_path": file_path,
-        "total_lines": total_lines,
-        "offset": offset,
-        "num_lines": len(selected),
-        "lines": selected,
+        "total_log_lines": total_log_lines,
+        "templates_found": len(templates),
+        "output_dir": output_dir,
+        "templates": templates,
     }

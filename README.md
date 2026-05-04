@@ -109,20 +109,14 @@ logan-mcp
 logan-mcp --transport streamable-http
 ```
 
-Analysis results are stored in `~/.logan/runs/<timestamp>/` by default. To customize the output location, set the `LOGAN_OUTPUT_DIR` environment variable:
-
-```bash
-export LOGAN_OUTPUT_DIR=/path/to/logan/output
-logan-mcp
-```
+Analysis results are stored in `~/.logan/runs/<timestamp>/` by default.
 
 ### Available Tools
 
 | Tool | Description |
 |------|-------------|
-| `analyze_logs` | Run the full analysis pipeline (preprocessing, Drain3 templatization, anomaly detection) on log files. Returns structured results including golden signal distribution, template counts, and report paths. |
-| `get_run_summary` | Retrieve structured results from a completed analysis run — metrics, golden signal timeline, and template-to-signal mapping as agent-friendly JSON. |
-| `read_log_sample` | Read a sample of lines from a log file. Useful for inspecting log format before running analysis. |
+| `analyze_logs` | Run the full analysis pipeline (preprocessing, Drain3 templatization, anomaly detection). Returns each unique log template with its representative log line, golden signal, fault categories, and occurrence count. |
+| `extract_templates` | Extract unique log patterns via Drain3 without ML classification. Fast (seconds) — useful for quickly understanding log structure before deciding to run full analysis. |
 
 ### Claude Desktop Configuration
 
@@ -132,10 +126,7 @@ Add to your Claude Desktop config (`claude_desktop_config.json`):
 {
   "mcpServers": {
     "logan": {
-      "command": "logan-mcp",
-      "env": {
-        "LOGAN_OUTPUT_DIR": "/path/to/logan/output"
-      }
+      "command": "logan-mcp"
     }
   }
 }
