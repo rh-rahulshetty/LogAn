@@ -93,6 +93,9 @@ class Templatizer:
         # Initialize the TemplateMiner with the loaded configuration and file persistence
         template_miner_temporary = TemplateMiner(mem_persistence, config)
 
+        # Preserve original log text before Drain3 masking overwrites it
+        df["original_text"] = df["text"].astype(str)
+
         # Initialize a dictionary to store the loglines grouped by template IDs
         template_log_dict = {}
 

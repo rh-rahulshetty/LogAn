@@ -19,18 +19,19 @@ def _flatten_fault(fault):
 
 class LogStore:
     """
-    Stores the structured Drain3 output so log lines don't need to be re-parsed
-    on every analysis run.
+    Stores the structured Drain3 output so log lines can be revisited without
+    re-parsing raw files.
 
     Two Parquet files are written under output_dir/store/:
-      templates.parquet  — one row per unique log pattern, with golden signal and
-                           fault category filled in after ML classification.
-      log_entries.parquet — one row per log line: template_id + variable tokens +
-                            timestamp + file source.  Full text is reconstructed
-                            on demand by substituting variables into the template.
+      templates.parquet  — one row per unique log pattern with golden signal,
+                           fault category, and occurrence count.
+      log_entries.parquet — one row per log line: template_id, original_text,
+                            variable tokens, timestamp, file source.
 
-    JSON equivalents are written to developer_debug_files/ so explorer.html can
-    load them without a server.
+    JSON equivalents (entries include original_text + golden_signal) are written
+    to developer_debug_files/ for explorer.html to load without a server.
+    Entries in both Parquet and JSON are sorted by timestamp DESC so the
+    explorer's default view (most recent first) needs no client-side sort.
     """
 
     TEMPLATES_FILE = "templates.parquet"
@@ -57,10 +58,8 @@ class LogStore:
         Return the variable tokens from log_line given its Drain3 template.
 
         Drain3 tokenises by whitespace and replaces variable positions with <*>.
-        This method does a linear scan: static tokens are skipped, wildcard
-        positions are collected.  The last wildcard absorbs any trailing extra
-        tokens so that a <*> at the end of the template always captures the
-        full tail of the log line.
+        Static tokens are skipped; wildcard positions are collected.  The last
+        wildcard absorbs any trailing extra tokens.
         """
         log_tokens = log_line.split()
         tmpl_tokens = template_str.split()
@@ -73,7 +72,6 @@ class LogStore:
             if tmpl_tok == "<*>":
                 is_final_token = (ti == len(tmpl_tokens) - 1)
                 if is_final_token and li < len(log_tokens):
-                    # Last template token is a wildcard — absorb all remaining log tokens.
                     variables.append(" ".join(log_tokens[li:]))
                     li = len(log_tokens)
                 else:
@@ -90,11 +88,11 @@ class LogStore:
 
     def build_from_df(self, df, temp_id_to_signal_map: dict):
         """
-        Populate templates and log_entries from the processed DataFrame.
+        Populate templates and log_entries from the post-classification DataFrame.
 
-        df must have columns: test_ids, template_str, variables (JSON string),
-        epoch, file_names.  golden_signal must also be present (added by
-        process_data before this is called).
+        Required columns: test_ids, template_str, variables, epoch, file_names.
+        original_text is used when present (added by run_drain.py from df['text']
+        before Drain3 masking strips it).
 
         temp_id_to_signal_map: (template_id, file_name) -> (golden_signal, fault_list)
         """
@@ -102,6 +100,8 @@ class LogStore:
         missing = required - set(df.columns)
         if missing:
             raise ValueError(f"DataFrame is missing columns needed by LogStore: {missing}")
+
+        has_original = "original_text" in df.columns
 
         # --- templates ---
         grp = (
@@ -127,22 +127,30 @@ class LogStore:
         self._update_signals(temp_id_to_signal_map)
 
         # --- log entries (vectorised) ---
-        subset = df[["test_ids", "epoch", "variables", "file_names"]].copy()
-        subset = subset.rename(
+        cols = ["test_ids", "epoch", "variables", "file_names"]
+        if has_original:
+            cols.append("original_text")
+
+        subset = df[cols].copy().rename(
             columns={
                 "test_ids": "template_id",
                 "epoch": "timestamp",
                 "file_names": "file_source",
             }
         )
-        # Coerce types
         subset["template_id"] = subset["template_id"].apply(
             lambda v: int(v) if str(v).lstrip("-").isdigit() else -1
         )
         subset["timestamp"] = subset["timestamp"].fillna(0).astype("int64")
         subset["variables"] = subset["variables"].fillna("[]").astype(str)
         subset["file_source"] = subset["file_source"].fillna("").astype(str)
+        if has_original:
+            subset["original_text"] = subset["original_text"].fillna("").astype(str)
+        else:
+            subset["original_text"] = ""
 
+        # Sort by timestamp DESC so both Parquet and JSON are in recency order
+        subset = subset.sort_values("timestamp", ascending=False)
         self._entries = subset.to_dict("records")
 
     def _update_signals(self, temp_id_to_signal_map: dict):
@@ -169,7 +177,13 @@ class LogStore:
     # ------------------------------------------------------------------
 
     def save_parquet(self):
-        """Write templates.parquet and log_entries.parquet to store_dir."""
+        """
+        Write templates.parquet and log_entries.parquet.
+
+        log_entries.parquet includes both original_text (for human reading) and
+        variables (for programmatic reconstruction / downstream analytics).
+        Entries are sorted by timestamp DESC for efficient recency-first queries.
+        """
         if self._templates:
             tbl = pa.Table.from_pylist(list(self._templates.values()))
             pq.write_table(tbl, os.path.join(self.store_dir, self.TEMPLATES_FILE))
@@ -180,36 +194,45 @@ class LogStore:
 
     def save_json_for_explorer(self) -> dict:
         """
-        Write JSON files consumed by explorer.html and return metadata that
-        the Jinja2 template embeds so the page knows which files to fetch.
+        Write JSON files consumed by explorer.html.
 
-        Returns:
-            {
-                "total_templates": int,
-                "total_entries":   int,
-                "chunks": [{"file": str, "count": int}, ...]
-            }
+        Each entry in the JSON chunks contains:
+          template_id, timestamp, original_text, file_source, golden_signal
+
+        golden_signal is denormalised from the template so the explorer can
+        filter the log feed by signal without a separate join.  The 'variables'
+        column is omitted from JSON (it lives in Parquet for downstream use).
+
+        Returns metadata that the Jinja2 template embeds so the page knows
+        which files to fetch.
         """
-        # templates JSON (one small file)
         templates_out = list(self._templates.values())
         with open(os.path.join(self.debug_dir, self.TEMPLATES_JSON), "w") as fh:
             json.dump(templates_out, fh)
 
-        # entries JSON (chunked)
         chunks = []
         for chunk_idx in range(0, max(len(self._entries), 1), ENTRIES_CHUNK_SIZE):
             chunk = self._entries[chunk_idx : chunk_idx + ENTRIES_CHUNK_SIZE]
             if not chunk:
                 break
+
+            # Emit display-only fields; denormalise golden_signal from template
+            display_chunk = []
+            for e in chunk:
+                tid = e["template_id"]
+                tmpl = self._templates.get(tid, {})
+                display_chunk.append({
+                    "template_id": tid,
+                    "timestamp": e["timestamp"],
+                    "original_text": e.get("original_text", ""),
+                    "file_source": e["file_source"],
+                    "golden_signal": (tmpl.get("golden_signal") or "information").lower(),
+                })
+
             fname = f"{self.ENTRIES_JSON_PREFIX}_{len(chunks) + 1}.json"
             with open(os.path.join(self.debug_dir, fname), "w") as fh:
-                json.dump(chunk, fh)
-            chunks.append(
-                {
-                    "file": f"../developer_debug_files/{fname}",
-                    "count": len(chunk),
-                }
-            )
+                json.dump(display_chunk, fh)
+            chunks.append({"file": f"../developer_debug_files/{fname}", "count": len(display_chunk)})
 
         return {
             "total_templates": len(templates_out),
