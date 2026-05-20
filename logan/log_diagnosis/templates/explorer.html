@@ -22,66 +22,168 @@
     </div>
 </header>
 
-<!-- ── Search bar ────────────────────────────────────────────────────── -->
-<div class="exp-searchbar">
-    <input class="exp-search-input" id="logSearch" type="search"
-           placeholder="Search log entries and variables…" aria-label="Search log entries">
-    <button class="exp-search-clear" id="searchClear" title="Clear search">✕</button>
-    <span class="exp-load-status" id="loadStatus">Initializing…</span>
-</div>
+<!-- ── Tab bar ───────────────────────────────────────────────────────── -->
+<nav class="exp-tab-bar" role="tablist" aria-label="Explorer views">
+    <button class="exp-tab-btn exp-tab-btn--active" data-tab="feed"    role="tab" aria-selected="true"  tabindex="0">Log Feed</button>
+    <button class="exp-tab-btn"                     data-tab="summary" role="tab" aria-selected="false" tabindex="-1">Golden Signals</button>
+</nav>
 
-<!-- ── Body ──────────────────────────────────────────────────────────── -->
-<div class="exp-body">
+<!-- ── Tab content ───────────────────────────────────────────────────── -->
+<div class="exp-tabs-content">
 
-    <!-- Left sidebar -->
-    <aside class="exp-sidebar">
+<!-- ══ TAB: Log Feed ══════════════════════════════════════════════════ -->
+<div id="tab-feed" class="exp-tab-pane exp-tab-pane--active" role="tabpanel">
 
-        <div class="exp-sidebar__section">Signal</div>
-        <div class="exp-signals" id="signalList"></div>
-
-        <div class="exp-sidebar__section">Sources</div>
-        <div class="exp-sources" id="sourceList"></div>
-
-        <div class="exp-sidebar__section">Templates</div>
-        <div class="exp-tmpl-search">
-            <input id="tmplSearch" type="search" placeholder="Filter templates…" aria-label="Filter templates">
-        </div>
-        <div class="exp-tmpl-list" id="tmplList" role="listbox" aria-label="Log templates"></div>
-
-    </aside>
-
-    <!-- Main log feed -->
-    <div class="exp-feed">
-        <div class="exp-feed__toolbar">
-            <div class="exp-active-filter" id="activeFilterPill" style="display:none">
-                <span id="activeFilterLabel"></span>
-                <button class="exp-active-filter__clear" id="clearFilter" title="Show all entries">✕</button>
-            </div>
-            <span class="exp-feed__count" id="feedCount"></span>
-            <div class="exp-sort-control">
-                <label class="exp-sort-label" for="sortSelect">Sort</label>
-                <select class="exp-sort-select" id="sortSelect">
-                    <option value="newest">Newest first</option>
-                    <option value="oldest">Oldest first</option>
-                    <option value="original">Log order</option>
-                </select>
-            </div>
-            <div class="exp-pagination">
-                <span class="exp-pg-label" id="pgLabel"></span>
-                <button class="exp-pg-btn" id="prevPage" disabled>&#8592;</button>
-                <button class="exp-pg-btn" id="nextPage">&#8594;</button>
-            </div>
-        </div>
-        <div class="exp-log-list" id="logList"></div>
+    <!-- Search bar -->
+    <div class="exp-searchbar">
+        <input class="exp-search-input" id="logSearch" type="search"
+               placeholder="Search log entries and variables…" aria-label="Search log entries">
+        <button class="exp-search-clear" id="searchClear" title="Clear search">✕</button>
+        <span class="exp-load-status" id="loadStatus">Initializing…</span>
     </div>
 
+    <!-- Body: sidebar + feed -->
+    <div class="exp-body">
+
+        <aside class="exp-sidebar">
+            <div class="exp-sidebar__section">Signal</div>
+            <div class="exp-signals" id="signalList"></div>
+            <div class="exp-sidebar__section">Sources</div>
+            <div class="exp-sources" id="sourceList"></div>
+            <div class="exp-sidebar__section">Templates</div>
+            <div class="exp-tmpl-search">
+                <input id="tmplSearch" type="search" placeholder="Filter templates…" aria-label="Filter templates">
+            </div>
+            <div class="exp-tmpl-list" id="tmplList" role="listbox" aria-label="Log templates"></div>
+        </aside>
+
+        <div class="exp-feed">
+            <div class="exp-feed__toolbar">
+                <div class="exp-active-filter" id="activeFilterPill" style="display:none">
+                    <span id="activeFilterLabel"></span>
+                    <button class="exp-active-filter__clear" id="clearFilter" title="Show all entries">✕</button>
+                </div>
+                <span class="exp-feed__count" id="feedCount"></span>
+                <div class="exp-sort-control">
+                    <label class="exp-sort-label" for="sortSelect">Sort</label>
+                    <select class="exp-sort-select" id="sortSelect">
+                        <option value="newest">Newest first</option>
+                        <option value="oldest">Oldest first</option>
+                        <option value="original">Log order</option>
+                    </select>
+                </div>
+                <div class="exp-pagination">
+                    <span class="exp-pg-label" id="pgLabel"></span>
+                    <button class="exp-pg-btn" id="prevPage" disabled>&#8592;</button>
+                    <button class="exp-pg-btn" id="nextPage">&#8594;</button>
+                </div>
+            </div>
+            <div class="exp-log-list" id="logList"></div>
+        </div>
+
+    </div><!-- /.exp-body -->
+</div><!-- /#tab-feed -->
+
+<!-- ══ TAB: Golden Signals ════════════════════════════════════════════ -->
+<div id="tab-summary" class="exp-tab-pane exp-summary-pane" role="tabpanel">
+
+    <!-- Stats cards -->
+    <div class="exp-summary-stats" id="summaryStats">
+        <div class="exp-summary-stat-card">
+            <span class="exp-summary-stat-card__value" id="sStatTemplates">—</span>
+            <span class="exp-summary-stat-card__label">Templates</span>
+        </div>
+        <div class="exp-summary-stat-card">
+            <span class="exp-summary-stat-card__value" id="sStatEntries">—</span>
+            <span class="exp-summary-stat-card__label">Log entries</span>
+        </div>
+        <div class="exp-summary-stat-card exp-summary-stat-card--anomaly">
+            <span class="exp-summary-stat-card__value" id="sStatAnomalies">—</span>
+            <span class="exp-summary-stat-card__label">Anomalous entries</span>
+        </div>
+        <div class="exp-summary-stat-card exp-summary-stat-card--info">
+            <span class="exp-summary-stat-card__value" id="sStatInfo">—</span>
+            <span class="exp-summary-stat-card__label">Info entries</span>
+        </div>
+        <div class="exp-summary-stat-card">
+            <span class="exp-summary-stat-card__value" id="sStatLines">—</span>
+            <span class="exp-summary-stat-card__label">Total log lines</span>
+        </div>
+        <div class="exp-summary-stat-card">
+            <span class="exp-summary-stat-card__value" id="sStatSize">—</span>
+            <span class="exp-summary-stat-card__label">File size</span>
+        </div>
+    </div>
+
+    <!-- Timeline chart -->
+    <div class="exp-summary-section" id="summaryTimelineSection">
+        <div class="exp-summary-section__title">Golden Signals Over Time</div>
+        <div class="exp-summary-section__toolbar">
+            <select id="summaryTimelineFile" class="exp-summary-select" aria-label="Select file for timeline"></select>
+            <span class="exp-summary-section__subtitle" id="summaryBinLabel"></span>
+            <button class="exp-toggle-btn" id="summaryTimelineMode" aria-pressed="true">Show raw count</button>
+        </div>
+        <div class="exp-timeline-scroll">
+            <canvas id="summaryTimelineChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Template table -->
+    <div class="exp-summary-section">
+        <div class="exp-summary-section__title">Log Templates</div>
+        <div class="exp-summary-toolbar">
+            <label for="summarySignalFilter">Signal</label>
+            <select id="summarySignalFilter" class="exp-summary-select">
+                <option value="">All</option>
+                <option value="error">Error</option>
+                <option value="latency">Latency</option>
+                <option value="saturation">Saturation</option>
+                <option value="traffic">Traffic</option>
+                <option value="availability">Availability</option>
+                <option value="information">Information</option>
+            </select>
+            <label for="summaryFileFilter">File</label>
+            <select id="summaryFileFilter" class="exp-summary-select">
+                <option value="">All files</option>
+            </select>
+            <input id="summarySearch" class="exp-summary-search" type="search" placeholder="Search templates…" aria-label="Search templates">
+            <span style="margin-left:auto;font-size:.78rem;color:var(--rh-black-300)" id="summaryTableCount"></span>
+        </div>
+        <div style="overflow-x:auto">
+            <table class="exp-summary-table" id="summaryTable">
+                <thead>
+                    <tr>
+                        <th class="col-num">#</th>
+                        <th>Representative log line</th>
+                        <th class="col-signal">Golden Signal</th>
+                        <th class="col-fault">Fault Category</th>
+                        <th class="col-count">Count</th>
+                        <th class="col-coverage">Coverage</th>
+                    </tr>
+                </thead>
+                <tbody id="summaryTableBody">
+                    <tr><td colspan="6" class="exp-summary-empty">Loading…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div><!-- /#tab-summary -->
+
+</div><!-- /.exp-tabs-content -->
+
+<!-- ── Full log preview modal ────────────────────────────────────────── -->
+<div class="exp-modal-overlay" id="logModal" role="dialog" aria-modal="true" aria-labelledby="logModalTitle" aria-hidden="true">
+    <div class="exp-modal">
+        <div class="exp-modal-header">
+            <span class="exp-modal-title" id="logModalTitle">Full log line</span>
+            <button class="exp-modal-close" id="logModalClose" aria-label="Close">×</button>
+        </div>
+        <div class="exp-modal-body" id="logModalBody"></div>
+    </div>
 </div>
 
-<!-- Redirect bare and CDN-relative specifiers to locally bundled copies.
-     apache-arrow: bare import used inside duckdb-browser.mjs.
-     /npm/tslib and /npm/flatbuffers: CDN-relative paths emitted by the
-     jsdelivr +esm build of apache-arrow; they resolve to localhost when
-     not served from cdn.jsdelivr.net, so we intercept them here. -->
+<!-- DuckDB import map -->
 <script type="importmap">
 {
     "imports": {
@@ -93,89 +195,113 @@
 </script>
 
 <script type="module">
-// ── Injected by Jinja2 ───────────────────────────────────────────────────────
-const TEMPLATES_FILE    = {{ templates_file | tojson }};
-const PARQUET_ENTRIES   = {{ parquet_entries | tojson }};
+// ── Injected by Jinja2 ──────────────────────────────────────────────────────
+const TEMPLATES_FILE    = {{ templates_file    | tojson }};
+const PARQUET_ENTRIES   = {{ parquet_entries   | tojson }};
 const PARQUET_TEMPLATES = {{ parquet_templates | tojson }};
+const TIMELINE_FILE     = {{ timeline_file     | tojson }};
+const METRICS_FILE      = {{ metrics_file      | tojson }};
 
-// ── DuckDB state ─────────────────────────────────────────────────────────────
+// ── DuckDB state ────────────────────────────────────────────────────────────
 let db   = null;
 let conn = null;
+let dbReady = false;
 
-// ── App state ─────────────────────────────────────────────────────────────────
-let allTemplates    = [];   // [{template_id, template, golden_signal, occurrence_count, …}]
-let templateMap     = {};   // template_id → template object
-let templateLabelMap = {};  // template_id → { num, label, color }
-let allSources      = [];   // [{file_source, cnt}]
-let signalCounts    = {};   // golden_signal → count  (from DuckDB after load)
-let sourceTids      = {};   // file_source → Set<template_id>
+// ── Shared app state ────────────────────────────────────────────────────────
+let allTemplates     = [];    // [{template_id, template, golden_signal, occurrence_count, …}]
+let templateMap      = {};    // template_id → template object
+let templateLabelMap = {};    // template_id → { num, label, color }
+let allSources       = [];    // [{file_source, cnt}]
+let signalCounts     = {};    // golden_signal → count (from DuckDB after load)
+let sourceTids       = {};    // file_source → Set<template_id>
 
-// Curated palette for the first N templates — hand-picked for distinctiveness.
+// Curated palette for the first N templates.
 const TMPL_PALETTE = [
     '#0f62fe','#da1e28','#198038','#8a3ffc','#e67e22',
     '#007d79','#b28600','#9f1853','#1192e8','#005d5d',
     '#6929c4','#9e1368','#0072c3','#a2191f','#24a148',
     '#8d5100',
 ];
-
-// Returns a unique colour for any template index.
-// Uses the curated palette first; beyond that, the golden-angle hue formula
-// (137.508° ≈ 360° / φ²) distributes hues maximally apart so every additional
-// template gets a colour as far from all previous ones as possible.
 function tmplColor(idx) {
     if (idx < TMPL_PALETTE.length) return TMPL_PALETTE[idx];
     const hue = Math.round((idx * 137.508) % 360);
     return `hsl(${hue},62%,36%)`;
 }
 
-// Filter state
+// ── Log Feed filter state ───────────────────────────────────────────────────
 let activeGS     = 'all';
 let activeTid    = null;
 let activeSource = null;
 let searchText   = '';
 let tmplSearch   = '';
-let sortMode     = 'newest';  // 'newest' | 'oldest' | 'original'
+let sortMode     = 'newest';
+let currentPage  = 0;
+let totalFiltered = 0;
+const PAGE_SIZE   = 100;
+let displayEntries = [];
 
-// Pagination
-let currentPage    = 0;
-let totalFiltered  = 0;
-const PAGE_SIZE    = 100;
-let displayEntries = [];   // current page rows from DuckDB
+// ── Summary state ───────────────────────────────────────────────────────────
+let summaryLoaded      = false;
+let summaryRows        = [];  // all template rows from DuckDB
+let totalEntriesCount  = 0;
+let summarySignalFilter = '';
+let summaryFileFilter   = '';
+let summarySearch       = '';
 
-let dbReady = false;
+// Timeline state
+let timelineChart     = null;
+let timelineRawData   = null;
+let timelineScaled    = true;
+let currentTimelineFile = null;
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────────────────────
 function esc(s) {
-    return String(s)
-        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 function fmt(n) { return n != null ? Number(n).toLocaleString() : '—'; }
 function fmtTs(epoch) {
     if (!epoch) return '—';
     return new Date(epoch * 1000).toISOString().replace('T',' ').slice(0,19) + ' UTC';
 }
-function gsClass(gs) {
-    return 'exp-signal-dot--' + (gs || 'information').toLowerCase().trim();
-}
+function gsClass(gs) { return 'exp-signal-dot--' + (gs || 'information').toLowerCase().trim(); }
 function highlight(text, query) {
     if (!query) return esc(text);
     const re = new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi');
     return esc(text).replace(re, '<mark>$1</mark>');
 }
 function renderTemplateText(tmpl) {
-    return tmpl.split(' ').map(tok =>
-        tok === '<*>'
-            ? '<span class="exp-tmpl-wildcard">&lt;*&gt;</span>'
-            : esc(tok)
+    return (tmpl || '').split(' ').map(tok =>
+        tok === '<*>' ? '<span class="exp-tmpl-wildcard">&lt;*&gt;</span>' : esc(tok)
     ).join(' ');
 }
-function sqlEsc(s) {
-    return String(s).replace(/'/g, "''");
+function sqlEsc(s) { return String(s).replace(/'/g, "''"); }
+function toRows(arrowTable) {
+    return arrowTable.toArray().map(r => Object.fromEntries(
+        Object.keys(r).map(k => [k, r[k]])
+    ));
+}
+function gsBadgeHtml(gs) {
+    const g = (gs || 'information').toLowerCase();
+    return `<span class="exp-log-gs exp-log-gs--${esc(g)}">${esc(g.charAt(0).toUpperCase() + g.slice(1))}</span>`;
 }
 
-// ── DuckDB init ───────────────────────────────────────────────────────────────
+// ── Modal ───────────────────────────────────────────────────────────────────
+function openModal(text) {
+    document.getElementById('logModalBody').textContent = text;
+    const m = document.getElementById('logModal');
+    m.classList.add('is-open');
+    m.setAttribute('aria-hidden', 'false');
+}
+function closeModal() {
+    const m = document.getElementById('logModal');
+    m.classList.remove('is-open');
+    m.setAttribute('aria-hidden', 'true');
+}
+document.getElementById('logModalClose').addEventListener('click', closeModal);
+document.getElementById('logModal').addEventListener('click', e => { if (e.target.id === 'logModal') closeModal(); });
+
+// ── DuckDB init ─────────────────────────────────────────────────────────────
 async function initDuckDB() {
-    // All three files are served locally from libs/duckdb/ — no CDN request at view time.
     const base      = new URL('./libs/duckdb/', window.location.href).href;
     const workerUrl = base + 'duckdb-browser-mvp.worker.js';
     const wasmUrl   = base + 'duckdb-mvp.wasm';
@@ -188,17 +314,22 @@ async function initDuckDB() {
 
     document.getElementById('loadStatus').textContent = 'Loading parquet…';
 
-    const [entriesBuf, templatesBuf] = await Promise.all([
-        fetch(PARQUET_ENTRIES).then(r => r.arrayBuffer()),
-        fetch(PARQUET_TEMPLATES).then(r => r.arrayBuffer()),
-    ]);
-    await db.registerFileBuffer('entries.parquet',   new Uint8Array(entriesBuf));
+    // templates.parquet is always small (one row per log pattern) — buffer it for fast queries.
+    const templatesBuf = await fetch(PARQUET_TEMPLATES).then(r => r.arrayBuffer());
     await db.registerFileBuffer('templates.parquet', new Uint8Array(templatesBuf));
+
+    // entries.parquet can be huge — register by URL so DuckDB fetches only the
+    // Parquet row groups it needs per query via HTTP range requests.
+    const entriesAbsUrl = new URL(PARQUET_ENTRIES, window.location.href).href;
+    await db.registerFileURL('entries.parquet', entriesAbsUrl, duckdb.DuckDBDataProtocol.HTTP, false);
 
     dbReady = true;
 }
 
-// ── SQL helpers ───────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// LOG FEED TAB
+// ══════════════════════════════════════════════════════════════════════════════
+
 function buildWhere() {
     const parts = [];
     if (activeGS !== 'all')    parts.push(`t.golden_signal = '${sqlEsc(activeGS)}'`);
@@ -210,7 +341,6 @@ function buildWhere() {
     }
     return parts.length ? 'WHERE ' + parts.join(' AND ') : '';
 }
-
 function buildOrderBy() {
     const ts = `CASE WHEN e.timestamp > 0 THEN e.timestamp ELSE NULL END`;
     switch (sortMode) {
@@ -220,13 +350,6 @@ function buildOrderBy() {
     }
 }
 
-function toRows(arrowTable) {
-    return arrowTable.toArray().map(r => Object.fromEntries(
-        Object.keys(r).map(k => [k, r[k]])
-    ));
-}
-
-// ── Data loading ──────────────────────────────────────────────────────────────
 async function loadTemplates() {
     const resp = await fetch(TEMPLATES_FILE);
     allTemplates = await resp.json();
@@ -235,33 +358,41 @@ async function loadTemplates() {
     for (let i = 0; i < allTemplates.length; i++) {
         const t = allTemplates[i];
         t.golden_signal = (t.golden_signal || 'information').toLowerCase();
+        // file_sources is stored as a JSON string — parse it once here.
+        t.file_sources = typeof t.file_sources === 'string'
+            ? JSON.parse(t.file_sources || '{}')
+            : (t.file_sources || {});
         templateMap[t.template_id] = t;
-        templateLabelMap[t.template_id] = {
-            num:   i + 1,
-            label: `T${i + 1}`,
-            color: tmplColor(i),
-        };
+        templateLabelMap[t.template_id] = { num: i + 1, label: `T${i + 1}`, color: tmplColor(i) };
     }
     renderSidebar();
 }
 
-async function loadSources() {
+// Derives file sidebar data from allTemplates — no entries.parquet scan needed.
+// Each template carries file_sources: {file_source: entry_count} computed at build time.
+// Falls back to a DuckDB query for output generated before this field was added.
+function buildSourcesFromTemplates() {
+    const fileTotals = {};
+    sourceTids = {};
+    for (const t of allTemplates) {
+        for (const [f, cnt] of Object.entries(t.file_sources)) {
+            fileTotals[f] = (fileTotals[f] || 0) + cnt;
+            if (!sourceTids[f]) sourceTids[f] = new Set();
+            sourceTids[f].add(t.template_id);
+        }
+    }
+    allSources = Object.entries(fileTotals)
+        .map(([file_source, cnt]) => ({ file_source, cnt }))
+        .sort((a, b) => b.cnt - a.cnt);
+    renderSourceList();
+}
+
+async function buildSourcesFromDuckDB() {
     const [countRes, tidRes] = await Promise.all([
-        conn.query(`
-            SELECT file_source, COUNT(*) AS cnt
-            FROM 'entries.parquet'
-            GROUP BY file_source
-            ORDER BY cnt DESC
-        `),
-        conn.query(`
-            SELECT DISTINCT file_source, template_id
-            FROM 'entries.parquet'
-        `),
+        conn.query(`SELECT file_source, COUNT(*) AS cnt FROM 'entries.parquet' GROUP BY file_source ORDER BY cnt DESC`),
+        conn.query(`SELECT DISTINCT file_source, template_id FROM 'entries.parquet'`),
     ]);
-    allSources = toRows(countRes).map(r => ({
-        file_source: String(r.file_source || ''),
-        cnt: Number(r.cnt),
-    }));
+    allSources = toRows(countRes).map(r => ({ file_source: String(r.file_source || ''), cnt: Number(r.cnt) }));
     sourceTids = {};
     for (const r of toRows(tidRes)) {
         const src = String(r.file_source || '');
@@ -271,42 +402,30 @@ async function loadSources() {
     renderSourceList();
 }
 
-async function loadSignalCounts() {
-    const result = await conn.query(`
-        SELECT t.golden_signal, COUNT(*) AS cnt
-        FROM 'entries.parquet' e
-        JOIN 'templates.parquet' t ON e.template_id = t.template_id
-        GROUP BY t.golden_signal
-    `);
+// Derives signal counts from allTemplates — no entries.parquet scan needed.
+// occurrence_count on each template is the total entry count for that pattern.
+function computeSignalCounts() {
     signalCounts = { all: 0 };
-    for (const r of toRows(result)) {
-        const gs  = (r.golden_signal || 'information').toLowerCase();
-        const cnt = Number(r.cnt);
-        signalCounts[gs] = cnt;
+    for (const t of allTemplates) {
+        const gs  = (t.golden_signal || 'information').toLowerCase();
+        const cnt = t.occurrence_count || 0;
+        signalCounts[gs] = (signalCounts[gs] || 0) + cnt;
         signalCounts.all += cnt;
     }
+    totalEntriesCount = signalCounts.all;
     renderSignalCounts();
 }
 
-// ── Query + render feed ───────────────────────────────────────────────────────
 async function queryEntries() {
     if (!dbReady) return;
-
     const where  = buildWhere();
     const offset = currentPage * PAGE_SIZE;
     const fromJoin = `FROM 'entries.parquet' e JOIN 'templates.parquet' t ON e.template_id = t.template_id`;
-
-    const countRes = await conn.query(
-        `SELECT COUNT(*) AS total ${fromJoin} ${where}`
-    );
+    const countRes = await conn.query(`SELECT COUNT(*) AS total ${fromJoin} ${where}`);
     totalFiltered = Number(toRows(countRes)[0].total);
-
     const rows = await conn.query(`
-        SELECT e.template_id, e.timestamp, e.original_text,
-               e.file_source, e.variables, t.golden_signal
-        ${fromJoin}
-        ${where}
-        ${buildOrderBy()}
+        SELECT e.template_id, e.timestamp, e.original_text, e.file_source, e.variables, t.golden_signal
+        ${fromJoin} ${where} ${buildOrderBy()}
         LIMIT ${PAGE_SIZE} OFFSET ${offset}
     `);
     displayEntries = toRows(rows).map(r => ({
@@ -317,31 +436,20 @@ async function queryEntries() {
         variables:     String(r.variables      || '[]'),
         golden_signal: (r.golden_signal || 'information').toLowerCase(),
     }));
-
     renderFeed();
 }
 
-async function applyFilters() {
-    currentPage = 0;
-    await queryEntries();
-}
+async function applyFilters() { currentPage = 0; await queryEntries(); }
 
-// ── Sidebar rendering ─────────────────────────────────────────────────────────
+// Sidebar rendering
 const KNOWN_SIGNALS = ['all','error','latency','saturation','availability','traffic','information'];
 
 function renderSignalCounts() {
-    // Use DuckDB counts when available, fall back to template-derived counts
-    const counts = Object.keys(signalCounts).length
-        ? signalCounts
-        : (() => {
-            const c = { all: 0 };
-            for (const t of allTemplates) {
-                c.all += t.occurrence_count;
-                c[t.golden_signal] = (c[t.golden_signal] || 0) + t.occurrence_count;
-            }
-            return c;
-        })();
-
+    const counts = Object.keys(signalCounts).length ? signalCounts : (() => {
+        const c = { all: 0 };
+        for (const t of allTemplates) { c.all += t.occurrence_count; c[t.golden_signal] = (c[t.golden_signal] || 0) + t.occurrence_count; }
+        return c;
+    })();
     const signals = ['all', ...Object.keys(counts).filter(k => k !== 'all').sort((a, b) =>
         (KNOWN_SIGNALS.indexOf(a) + 1 || 99) - (KNOWN_SIGNALS.indexOf(b) + 1 || 99)
     )];
@@ -364,10 +472,7 @@ function renderSignalCounts() {
 
 function renderSourceList() {
     const list = document.getElementById('sourceList');
-    if (!allSources.length) {
-        list.innerHTML = '<div class="exp-tmpl-empty">No sources.</div>';
-        return;
-    }
+    if (!allSources.length) { list.innerHTML = '<div class="exp-tmpl-empty">No sources.</div>'; return; }
     list.innerHTML = allSources.map(s => {
         const name   = s.file_source.split('/').pop() || s.file_source || '(unknown)';
         const active = s.file_source === activeSource ? ' active' : '';
@@ -384,10 +489,7 @@ function renderSourceList() {
     });
 }
 
-function renderSidebar() {
-    renderSignalCounts();
-    renderTemplateList();
-}
+function renderSidebar() { renderSignalCounts(); renderTemplateList(); }
 
 function renderTemplateList() {
     const q = tmplSearch.toLowerCase();
@@ -399,17 +501,13 @@ function renderTemplateList() {
         return true;
     });
     const list = document.getElementById('tmplList');
-    if (!visible.length) {
-        list.innerHTML = '<div class="exp-tmpl-empty">No templates match.</div>';
-        return;
-    }
+    if (!visible.length) { list.innerHTML = '<div class="exp-tmpl-empty">No templates match.</div>'; return; }
     list.innerHTML = visible.map(t => {
         const active = t.template_id === activeTid ? ' active' : '';
         const lbl    = templateLabelMap[t.template_id] || { label: '?', color: '#6a6e73' };
         return `<div class="exp-tmpl-row${active}" data-tid="${t.template_id}" role="option"
                      aria-selected="${t.template_id === activeTid}" tabindex="0">
-            <span class="exp-tmpl-badge" style="background:${lbl.color}"
-                  title="Template ${lbl.num}">${esc(lbl.label)}</span>
+            <span class="exp-tmpl-badge" style="background:${lbl.color}" title="Template ${lbl.num}">${esc(lbl.label)}</span>
             <div class="exp-tmpl-body">
                 <div class="exp-tmpl-text">${renderTemplateText(t.template || '')}</div>
                 <div class="exp-tmpl-count">${fmt(t.occurrence_count)} occurrences</div>
@@ -423,88 +521,50 @@ function renderTemplateList() {
     });
 }
 
-// ── Filter actions ────────────────────────────────────────────────────────────
-function setSignal(gs) {
-    activeGS  = gs;
-    activeTid = null;
-    renderSidebar();
-    updateFilterPill();
-    applyFilters();
-}
-
+function setSignal(gs)  { activeGS = gs; activeTid = null; renderSidebar(); updateFilterPill(); applyFilters(); }
 function setSource(src) {
     activeSource = (activeSource === src) ? null : src;
-    // Deselect any template that no longer belongs to this source
     if (activeTid !== null && activeSource !== null) {
         const tids = sourceTids[activeSource] || new Set();
-        if (!tids.has(activeTid)) {
-            activeTid = null;
-            updateFilterPill();
-        }
+        if (!tids.has(activeTid)) { activeTid = null; updateFilterPill(); }
     }
-    renderSourceList();
-    renderTemplateList();
-    applyFilters();
+    renderSourceList(); renderTemplateList(); applyFilters();
 }
-
-function selectTemplate(tid) {
-    activeTid = (activeTid === tid) ? null : tid;
-    renderTemplateList();
-    updateFilterPill();
-    applyFilters();
-}
-
+function selectTemplate(tid) { activeTid = (activeTid === tid) ? null : tid; renderTemplateList(); updateFilterPill(); applyFilters(); }
 function clearAllFilters() {
-    activeGS     = 'all';
-    activeTid    = null;
-    activeSource = null;
-    searchText   = '';
+    activeGS = 'all'; activeTid = null; activeSource = null; searchText = '';
     document.getElementById('logSearch').value = '';
-    renderSidebar();
-    renderSourceList();
-    updateFilterPill();
-    applyFilters();
+    renderSidebar(); renderSourceList(); updateFilterPill(); applyFilters();
 }
-
 function updateFilterPill() {
     const pill  = document.getElementById('activeFilterPill');
     const label = document.getElementById('activeFilterLabel');
     if (activeTid !== null) {
         const lbl = templateLabelMap[activeTid] || { label: `T?`, color: '#6a6e73' };
         const t   = templateMap[activeTid];
-        const tip = t ? t.template : '';
         label.innerHTML =
-            `<span style="display:inline-block;width:10px;height:10px;border-radius:2px;`
-            + `background:${lbl.color};vertical-align:middle;margin-right:5px;flex-shrink:0"></span>`
+            `<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${lbl.color};vertical-align:middle;margin-right:5px;flex-shrink:0"></span>`
             + esc(lbl.label);
-        pill.title = tip;
+        pill.title = t ? t.template : '';
         pill.style.display = 'flex';
     } else {
         pill.style.display = 'none';
     }
 }
 
-// ── Feed rendering ────────────────────────────────────────────────────────────
 function renderFeed() {
     const total = totalFiltered;
     const start = currentPage * PAGE_SIZE;
     const end   = Math.min(start + PAGE_SIZE, start + displayEntries.length);
-
-    document.getElementById('feedCount').textContent =
-        total > 0 ? `${fmt(total)} entries` : '0 entries';
-    document.getElementById('pgLabel').textContent =
-        total > 0 ? `${fmt(start + 1)}–${fmt(end)} of ${fmt(total)}` : '';
+    document.getElementById('feedCount').textContent = total > 0 ? `${fmt(total)} entries` : '0 entries';
+    document.getElementById('pgLabel').textContent   = total > 0 ? `${fmt(start+1)}–${fmt(end)} of ${fmt(total)}` : '';
     document.getElementById('prevPage').disabled = currentPage === 0;
     document.getElementById('nextPage').disabled = end >= total;
-
     const logList = document.getElementById('logList');
     if (!displayEntries.length) {
-        logList.innerHTML = `<div class="exp-log-empty">${
-            dbReady ? 'No log entries match the current filters.' : 'Loading…'
-        }</div>`;
+        logList.innerHTML = `<div class="exp-log-empty">${dbReady ? 'No log entries match the current filters.' : 'Loading…'}</div>`;
         return;
     }
-
     const q = searchText;
     logList.innerHTML = displayEntries.map(e => {
         const gs    = e.golden_signal || 'information';
@@ -512,82 +572,364 @@ function renderFeed() {
         const tmpl  = templateMap[e.template_id];
         const lbl   = templateLabelMap[e.template_id] || { label: '?', color: '#6a6e73' };
         const fname = e.file_source.split('/').pop() || e.file_source || '(unknown)';
-
         let varsHtml = '';
         try {
             const vars = JSON.parse(e.variables);
             if (vars.length) {
-                const chips = vars.map(v =>
-                    `<span class="exp-var-chip">${highlight(v, q)}</span>`
-                ).join('');
-                varsHtml = `<div class="exp-log-vars">${chips}</div>`;
+                varsHtml = `<div class="exp-log-vars">${vars.map(v => `<span class="exp-var-chip">${highlight(v, q)}</span>`).join('')}</div>`;
             }
         } catch (_) {}
-
         return `<div class="exp-log-entry">
             <div class="exp-log-meta">
                 <span class="exp-log-file" title="${esc(e.file_source)}">${esc(fname)}</span>
                 <span class="exp-log-gs exp-log-gs--${esc(gs)}">${esc(gsLbl)}</span>
-                <span class="exp-tmpl-badge exp-log-tmpl-badge"
-                      style="background:${lbl.color}"
-                      title="${esc(tmpl ? tmpl.template : '')}">${esc(lbl.label)}</span>
+                <span class="exp-tmpl-badge exp-log-tmpl-badge" style="background:${lbl.color}" title="${esc(tmpl ? tmpl.template : '')}">${esc(lbl.label)}</span>
             </div>
             <div class="exp-log-text">${highlight(e.original_text, q)}</div>
             ${varsHtml}
         </div>`;
     }).join('');
-
     logList.scrollTop = 0;
 }
 
-// ── Event wiring ──────────────────────────────────────────────────────────────
-document.getElementById('logSearch').addEventListener('input', e => {
-    searchText  = e.target.value.trim();
-    currentPage = 0;
-    applyFilters();
-});
-document.getElementById('searchClear').addEventListener('click', () => {
-    searchText  = '';
-    currentPage = 0;
-    document.getElementById('logSearch').value = '';
-    applyFilters();
-});
-document.getElementById('tmplSearch').addEventListener('input', e => {
-    tmplSearch = e.target.value.trim();
-    renderTemplateList();
-});
-document.getElementById('clearFilter').addEventListener('click', () => {
-    activeTid   = null;
-    currentPage = 0;
-    renderTemplateList();
-    updateFilterPill();
-    applyFilters();
-});
-document.getElementById('sortSelect').addEventListener('change', e => {
-    sortMode    = e.target.value;
-    currentPage = 0;
-    applyFilters();
-});
-document.getElementById('prevPage').addEventListener('click', async () => {
-    if (currentPage > 0) { currentPage--; await queryEntries(); }
-});
-document.getElementById('nextPage').addEventListener('click', async () => {
-    if ((currentPage + 1) * PAGE_SIZE < totalFiltered) { currentPage++; await queryEntries(); }
+// Feed event wiring
+document.getElementById('logSearch').addEventListener('input', e => { searchText = e.target.value.trim(); currentPage = 0; applyFilters(); });
+document.getElementById('searchClear').addEventListener('click', () => { searchText = ''; currentPage = 0; document.getElementById('logSearch').value = ''; applyFilters(); });
+document.getElementById('tmplSearch').addEventListener('input', e => { tmplSearch = e.target.value.trim(); renderTemplateList(); });
+document.getElementById('clearFilter').addEventListener('click', () => { activeTid = null; currentPage = 0; renderTemplateList(); updateFilterPill(); applyFilters(); });
+document.getElementById('sortSelect').addEventListener('change', e => { sortMode = e.target.value; currentPage = 0; applyFilters(); });
+document.getElementById('prevPage').addEventListener('click', async () => { if (currentPage > 0) { currentPage--; await queryEntries(); } });
+document.getElementById('nextPage').addEventListener('click', async () => { if ((currentPage + 1) * PAGE_SIZE < totalFiltered) { currentPage++; await queryEntries(); } });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SUMMARY TAB
+// ══════════════════════════════════════════════════════════════════════════════
+
+const GS_COLORS = {
+    error: '#c9190b', latency: '#ec7a08', saturation: '#6a4f9c',
+    traffic: '#004b95', availability: '#3e8635', information: '#6a6e73',
+};
+const EXTRA_PALETTE = ['#009596','#a2d9d9','#f4c145','#b8860b','#8b008b','#2e8b57'];
+function getSignalColor(sig, extraIdx) {
+    const k = sig.toLowerCase();
+    return GS_COLORS[k] || EXTRA_PALETTE[extraIdx % EXTRA_PALETTE.length];
+}
+
+function buildTimelineDatasets(fileData, scaled) {
+    const signals = fileData.signals || [];
+    let extraIdx  = 0;
+    return signals.map(sig => {
+        const color = getSignalColor(sig, extraIdx);
+        if (!GS_COLORS[sig.toLowerCase()]) extraIdx++;
+        return {
+            label: sig.charAt(0).toUpperCase() + sig.slice(1),
+            data: fileData.bins.map(b => {
+                const val = b[sig] || 0;
+                if (!scaled || val === 0) return val;
+                return Math.round(Math.log10(val + 1) * 100) / 100;
+            }),
+            rawData: fileData.bins.map(b => b[sig] || 0),
+            backgroundColor: color,
+            borderWidth: 0,
+        };
+    });
+}
+
+function renderTimelineForFile(fname) {
+    const fileData = timelineRawData.by_file[fname];
+    if (!fileData || !fileData.bins || fileData.bins.length === 0) return;
+    currentTimelineFile = fname;
+    const binLabelEl = document.getElementById('summaryBinLabel');
+    if (binLabelEl) binLabelEl.textContent = 'Bin size: ' + fileData.bin_label;
+    const labels   = fileData.bins.map(b => b.label);
+    const datasets = buildTimelineDatasets(fileData, timelineScaled);
+    const container = document.querySelector('.exp-timeline-scroll');
+    const canvas    = document.getElementById('summaryTimelineChart');
+    const minWidth  = Math.max(container.clientWidth, fileData.bins.length * 18);
+    canvas.style.width  = minWidth + 'px';
+    canvas.style.height = '260px';
+    const yTitle = timelineScaled ? 'Log count (log₁₀ scaled)' : 'Log count';
+    if (timelineChart) {
+        canvas.width  = minWidth;
+        canvas.height = 260;
+        timelineChart.data.labels   = labels;
+        timelineChart.data.datasets = datasets;
+        timelineChart.options.scales.y.title.text = yTitle;
+        timelineChart.update();
+    } else {
+        canvas.width  = minWidth;
+        canvas.height = 260;
+        const Chart = window._LoganChart;
+        timelineChart = new Chart(canvas, {
+            type: 'bar',
+            data: { labels, datasets },
+            options: {
+                responsive: false, maintainAspectRatio: false,
+                scales: {
+                    x: { stacked: true, ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 40, font: { size: 10 } }, grid: { display: false } },
+                    y: { stacked: true, beginAtZero: true, title: { display: true, text: yTitle, font: { size: 12 } }, ticks: { font: { size: 11 } } },
+                },
+                plugins: {
+                    legend: { position: 'top', labels: { usePointStyle: true, pointStyle: 'rectRounded', padding: 14, font: { size: 12 } } },
+                    tooltip: {
+                        mode: 'index', intersect: false,
+                        callbacks: {
+                            title: items => items[0].label,
+                            label: ctx => {
+                                const raw = ctx.dataset.rawData ? ctx.dataset.rawData[ctx.dataIndex] : ctx.raw;
+                                if (raw === 0) return null;
+                                return ctx.dataset.label + ': ' + raw;
+                            },
+                        },
+                    },
+                },
+            },
+        });
+    }
+}
+
+async function loadSummaryTimeline() {
+    const section = document.getElementById('summaryTimelineSection');
+    if (!TIMELINE_FILE) { section.style.display = 'none'; return; }
+
+    // Dynamically load chart.js once
+    if (!window._LoganChart) {
+        await new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = './libs/chart.js';
+            s.onload  = () => { window._LoganChart = window.Chart; resolve(); };
+            s.onerror = reject;
+            document.head.appendChild(s);
+        });
+    }
+
+    try {
+        const data = await fetch(TIMELINE_FILE).then(r => r.json());
+        if (!data.by_file || Object.keys(data.by_file).length === 0) { section.style.display = 'none'; return; }
+        timelineRawData = data;
+        const fileSelect = document.getElementById('summaryTimelineFile');
+        const files = data.files || Object.keys(data.by_file).sort();
+        files.forEach(f => {
+            const opt = document.createElement('option');
+            opt.value = f;
+            opt.textContent = (f.match(/([^/\\]+)$/) || [f,f])[1];
+            opt.title = f;
+            fileSelect.appendChild(opt);
+        });
+        fileSelect.addEventListener('change', () => renderTimelineForFile(fileSelect.value));
+        if (files.length > 0) renderTimelineForFile(files[0]);
+        const toggleBtn = document.getElementById('summaryTimelineMode');
+        toggleBtn.addEventListener('click', () => {
+            timelineScaled = !timelineScaled;
+            if (currentTimelineFile) renderTimelineForFile(currentTimelineFile);
+            toggleBtn.textContent = timelineScaled ? 'Show raw count' : 'Show scaled';
+            toggleBtn.setAttribute('aria-pressed', timelineScaled ? 'true' : 'false');
+        });
+    } catch (_) {
+        section.style.display = 'none';
+    }
+}
+
+async function loadSummaryStats() {
+    // From signalCounts (already loaded for Log Feed)
+    if (Object.keys(signalCounts).length) {
+        document.getElementById('sStatTemplates').textContent = fmt(allTemplates.length);
+        document.getElementById('sStatEntries').textContent   = fmt(signalCounts.all || 0);
+        const anomaly = Object.entries(signalCounts).filter(([k]) => k !== 'all' && k !== 'information').reduce((s, [,v]) => s + v, 0);
+        document.getElementById('sStatAnomalies').textContent = fmt(anomaly);
+        document.getElementById('sStatInfo').textContent      = fmt(signalCounts.information || 0);
+    } else {
+        // Fallback: count from templates JSON
+        const total = allTemplates.reduce((s, t) => s + t.occurrence_count, 0);
+        const anomaly = allTemplates.filter(t => t.golden_signal !== 'information').reduce((s, t) => s + t.occurrence_count, 0);
+        document.getElementById('sStatTemplates').textContent  = fmt(allTemplates.length);
+        document.getElementById('sStatEntries').textContent    = fmt(total);
+        document.getElementById('sStatAnomalies').textContent  = fmt(anomaly);
+        document.getElementById('sStatInfo').textContent       = fmt(total - anomaly);
+        totalEntriesCount = total;
+    }
+
+    // From preprocessing metrics JSON
+    if (METRICS_FILE) {
+        try {
+            const m = await fetch(METRICS_FILE).then(r => r.json());
+            if (m.num_log_lines_total != null) document.getElementById('sStatLines').textContent = fmt(m.num_log_lines_total);
+            if (m.file_size_bytes != null) {
+                const b = m.file_size_bytes;
+                const display = b >= 1e9 ? (b/1e9).toFixed(1)+' GB'
+                              : b >= 1e6 ? (b/1e6).toFixed(1)+' MB'
+                              : b >= 1e3 ? (b/1e3).toFixed(1)+' KB'
+                              : b + ' B';
+                document.getElementById('sStatSize').textContent = display;
+            }
+        } catch (_) {}
+    }
+}
+
+// Builds Golden Signals table rows from allTemplates — no DuckDB query needed.
+// rep_log and file_sources are embedded in each template at build time.
+function buildSummaryFromTemplates() {
+    summaryRows = allTemplates.map(t => ({
+        template_id:      t.template_id,
+        template:         t.template         || '',
+        golden_signal:    t.golden_signal    || 'information',
+        fault_category:   t.fault_category   || 'other',
+        occurrence_count: t.occurrence_count || 0,
+        rep_log:          t.rep_log          || t.template || '',
+        // file_sources may be absent in output generated before this field was added;
+        // fall back to allSources so the file filter still has options.
+        file_sources:     Object.keys(t.file_sources).length
+            ? t.file_sources
+            : Object.fromEntries(allSources.map(s => [s.file_source, 0])),
+    }));
+    summaryRows.sort((a, b) => {
+        const aInfo = a.golden_signal === 'information' ? 1 : 0;
+        const bInfo = b.golden_signal === 'information' ? 1 : 0;
+        if (aInfo !== bInfo) return aInfo - bInfo;
+        return a.occurrence_count - b.occurrence_count;
+    });
+    totalEntriesCount = totalEntriesCount || summaryRows.reduce((s, r) => s + r.occurrence_count, 0);
+    renderSummaryTable();
+    populateSummaryFileFilter();
+}
+
+function populateSummaryFileFilter() {
+    const sel = document.getElementById('summaryFileFilter');
+    const fileSet = new Set();
+    summaryRows.forEach(r => Object.keys(r.file_sources).forEach(f => fileSet.add(f)));
+    [...fileSet].sort().forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f;
+        opt.textContent = f.split('/').pop() || f;
+        opt.title = f;
+        sel.appendChild(opt);
+    });
+}
+
+function renderSummaryTable() {
+    const gsF = summarySignalFilter.toLowerCase();
+    const fileF = summaryFileFilter.toLowerCase();
+    const q = summarySearch.toLowerCase();
+    const visible = summaryRows.filter(r => {
+        if (gsF   && r.golden_signal !== gsF)         return false;
+        if (fileF && !Object.keys(r.file_sources).some(f => f.toLowerCase() === fileF)) return false;
+        if (q && !r.rep_log.toLowerCase().includes(q) && !r.template.toLowerCase().includes(q)) return false;
+        return true;
+    });
+    document.getElementById('summaryTableCount').textContent = `${fmt(visible.length)} templates`;
+    const totalOcc = totalEntriesCount || 1;
+    const TRUNC = 400;
+    const tbody = document.getElementById('summaryTableBody');
+    if (!visible.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="exp-summary-empty">No templates match.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = visible.map((r, i) => {
+        const gs    = r.golden_signal;
+        const lbl   = templateLabelMap[r.template_id];
+        const logTxt = r.rep_log || r.template || '';
+        const isTruncated = logTxt.length > TRUNC;
+        const displayTxt  = isTruncated ? logTxt.slice(0, TRUNC) : logTxt;
+        const viewFull = isTruncated
+            ? `<button class="exp-summary-view-full" data-full="${esc(logTxt)}">…view full</button>`
+            : '';
+        const tmplBadge = lbl
+            ? `<span class="exp-tmpl-badge" style="background:${lbl.color};font-size:.62rem;height:16px" title="${esc(r.template)}">${esc(lbl.label)}</span>`
+            : '';
+        const coverage = totalOcc ? (r.occurrence_count / totalOcc * 100).toFixed(2) + '%' : '—';
+        return `<tr data-tid="${r.template_id}" title="View logs for this template">
+            <td class="col-num">${i+1}&nbsp;${tmplBadge}</td>
+            <td class="col-log"><span class="exp-summary-log-text">${esc(displayTxt)}</span>${viewFull}</td>
+            <td class="col-signal">${gsBadgeHtml(gs)}</td>
+            <td class="col-fault">${esc(r.fault_category)}</td>
+            <td class="col-count">${fmt(r.occurrence_count)}</td>
+            <td class="col-coverage">${coverage}</td>
+        </tr>`;
+    }).join('');
+
+    tbody.querySelectorAll('.exp-summary-view-full').forEach(btn => {
+        btn.addEventListener('click', e => { e.stopPropagation(); openModal(btn.dataset.full); });
+    });
+
+    tbody.querySelectorAll('tr[data-tid]').forEach(row => {
+        row.addEventListener('click', () => {
+            selectTemplate(Number(row.dataset.tid));
+            switchTab('feed');
+        });
+    });
+}
+
+// Summary filter wiring
+document.getElementById('summarySignalFilter').addEventListener('change', e => { summarySignalFilter = e.target.value; renderSummaryTable(); });
+document.getElementById('summaryFileFilter').addEventListener('change',   e => { summaryFileFilter   = e.target.value; renderSummaryTable(); });
+document.getElementById('summarySearch').addEventListener('input', e => { summarySearch = e.target.value.trim(); renderSummaryTable(); });
+
+async function activateSummaryTab() {
+    if (summaryLoaded) return;
+    summaryLoaded = true;
+    buildSummaryFromTemplates();
+    await Promise.all([loadSummaryStats(), loadSummaryTimeline()]);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ANOMALIES TAB
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TAB SWITCHING
+// ══════════════════════════════════════════════════════════════════════════════
+
+const tabPanes = {
+    feed:    document.getElementById('tab-feed'),
+    summary: document.getElementById('tab-summary'),
+};
+
+function switchTab(name) {
+    document.querySelectorAll('.exp-tab-btn').forEach(btn => {
+        const active = btn.dataset.tab === name;
+        btn.classList.toggle('exp-tab-btn--active', active);
+        btn.setAttribute('aria-selected', active ? 'true' : 'false');
+        btn.tabIndex = active ? 0 : -1;
+    });
+    Object.entries(tabPanes).forEach(([k, pane]) => {
+        pane.classList.toggle('exp-tab-pane--active', k === name);
+    });
+    if (name === 'summary') activateSummaryTab();
+}
+
+document.querySelectorAll('.exp-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    btn.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') switchTab(btn.dataset.tab);
+        if (e.key === 'ArrowRight') {
+            const next = btn.nextElementSibling;
+            if (next) { next.focus(); switchTab(next.dataset.tab); }
+        }
+        if (e.key === 'ArrowLeft') {
+            const prev = btn.previousElementSibling;
+            if (prev) { prev.focus(); switchTab(prev.dataset.tab); }
+        }
+    });
 });
 
-// ── Boot ──────────────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// BOOT
+// ══════════════════════════════════════════════════════════════════════════════
 (async function init() {
     try {
-        await loadTemplates();   // sidebar visible immediately from JSON
+        // Templates JSON is small — load it first so the sidebar is immediately usable.
+        await loadTemplates();
+        const hasFileSources = allTemplates.length > 0 && Object.keys(allTemplates[0].file_sources).length > 0;
+        buildSourcesFromTemplates();  // populates allSources + sourceTids from JSON
+        computeSignalCounts();        // populates signalCounts from JSON
         renderFeed();
 
+        // DuckDB init is now fast: templates buffered, entries registered by URL only.
         await initDuckDB();
-        document.getElementById('loadStatus').textContent = 'Indexing…';
+        document.getElementById('loadStatus').textContent = `{{ "{:,}".format(total_entries) }} entries ready`;
 
-        await Promise.all([loadSources(), loadSignalCounts()]);
-
-        document.getElementById('loadStatus').textContent =
-            `{{ "{:,}".format(total_entries) }} entries ready`;
+        // Fall back to DuckDB for source data if the templates JSON predates file_sources.
+        if (!hasFileSources) await buildSourcesFromDuckDB();
 
         await applyFilters();
     } catch (err) {

@@ -399,6 +399,8 @@ def get_explorer_html_str(store_meta: dict) -> str:
         templates_file=store_meta.get("templates_file", ""),
         parquet_entries=store_meta.get("parquet_entries", ""),
         parquet_templates=store_meta.get("parquet_templates", ""),
+        timeline_file=store_meta.get("timeline_file", ""),
+        metrics_file=store_meta.get("metrics_file", ""),
     )
 
 

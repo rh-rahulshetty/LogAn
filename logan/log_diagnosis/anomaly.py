@@ -2,10 +2,9 @@ import os
 import json
 import pandas as pd
 import time
-import csv
 from .core import Core
 from datetime import datetime
-from logan.log_diagnosis.utils import get_anomaly_html_str, get_summary_html_str, get_explorer_html_str, compute_golden_signal_timeline
+from logan.log_diagnosis.utils import get_explorer_html_str, compute_golden_signal_timeline
 from logan.log_diagnosis.models import ModelManager, AllModels, ModelType
 from logan.store.store import LogStore
 
@@ -307,23 +306,6 @@ class Anomaly(Core):
             'list_result': ["Anomaly"]*len(log_seq),
             'list_templates': template_ids2
         })
-
-        # Read debug information (ignored and processed files)
-        with open(os.path.join(developer_debug_dir, "ignored_files.log"), 'r') as reader:
-            ignored_files = reader.read().splitlines()
-
-        with open(os.path.join(developer_debug_dir, "processed_files.log"), 'r') as reader:
-            processsed_files = reader.read().splitlines()
-        
-        # Generate the HTML table for the anomaly report
-        html_table = get_anomaly_html_str(df_final_anomalies, output_dir)
-        with open(os.path.join(log_diagnosis_dir, "anomalies.html"), "w") as f:
-            f.write(html_table)
-
-        # Generate the HTML table for the summary report
-        html_table = get_summary_html_str(df_for_summary_html, include_golden_signal_dropdown=True, ignored_file_list=ignored_files, processed_file_list=processsed_files, output_dir=output_dir, has_timeline_data=has_timeline_data)
-        with open(os.path.join(log_diagnosis_dir, "summary.html"), "w") as f:
-            f.write(html_table)
 
         # Build and persist the structured log store, then render explorer
         try:

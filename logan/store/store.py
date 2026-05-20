@@ -162,6 +162,29 @@ class LogStore:
 
         self._entries = subset.to_dict("records")
 
+        # Annotate templates with a representative log line and per-file counts.
+        # Both are derived from entries so we compute them here while subset is still live.
+        rep_log_map = (
+            subset[subset["original_text"] != ""]
+            .groupby("template_id")["original_text"]
+            .first()
+            .to_dict()
+        )
+        file_sources_map: dict[int, dict] = {}
+        for _, row in (
+            subset.groupby(["template_id", "file_source"])
+            .size()
+            .reset_index(name="cnt")
+            .iterrows()
+        ):
+            tid = int(row["template_id"])
+            if tid not in file_sources_map:
+                file_sources_map[tid] = {}
+            file_sources_map[tid][row["file_source"]] = int(row["cnt"])
+        for tid in self._templates:
+            self._templates[tid]["rep_log"] = rep_log_map.get(tid, "")
+            self._templates[tid]["file_sources"] = json.dumps(file_sources_map.get(tid, {}))
+
     def _update_signals(self, temp_id_to_signal_map: dict):
         signal_votes: dict[int, dict] = {}
         fault_by_tid: dict[int, str] = {}
@@ -219,4 +242,6 @@ class LogStore:
             "templates_file": "../developer_debug_files/" + self.TEMPLATES_JSON,
             "parquet_entries": "../store/" + self.ENTRIES_FILE,
             "parquet_templates": "../store/" + self.TEMPLATES_FILE,
+            "timeline_file": "../developer_debug_files/golden_signal_timeline.json",
+            "metrics_file": "../metrics/preprocessing.json",
         }
