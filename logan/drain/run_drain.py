@@ -7,6 +7,8 @@ from drain3.template_miner import TemplateMiner
 from drain3.template_miner_config import TemplateMinerConfig
 from drain3.file_persistence import FilePersistence
 
+from logan.store.store import LogStore
+
 class Templatizer:
     """
     The Templatizer class is responsible for mining log templates using the DRAIN3 algorithm.
@@ -91,15 +93,26 @@ class Templatizer:
         # Initialize the TemplateMiner with the loaded configuration and file persistence
         template_miner_temporary = TemplateMiner(mem_persistence, config)
 
+        # Preserve original log text before Drain3 masking overwrites it
+        df["original_text"] = df["text"].astype(str)
+
         # Initialize a dictionary to store the loglines grouped by template IDs
         template_log_dict = {}
 
         # Mine templates by iterating directly over the column (avoids pd.Series overhead of df.apply)
         try:
             test_ids = []
+            template_strs = []
+            variables_list = []
             for log in df["truncated_log"].values:
-                test_ids.append(template_miner_temporary.add_log_message(log)['cluster_id'])
+                result = template_miner_temporary.add_log_message(log)
+                test_ids.append(result['cluster_id'])
+                tmpl = result.get('template_mined', '')
+                template_strs.append(tmpl)
+                variables_list.append(LogStore.extract_variables(log, tmpl))
             df["test_ids"] = test_ids
+            df["template_str"] = template_strs
+            df["variables"] = [json.dumps(v) for v in variables_list]
 
             if (self.debug_mode == "true"):
                 template_log_dict = df.groupby("test_ids")["truncated_log"].agg(list).to_dict()
