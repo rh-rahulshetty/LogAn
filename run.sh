@@ -53,6 +53,16 @@ LOGAN_PROCESS_TXT_FILES="${LOGAN_PROCESS_TXT_FILES:-false}"
 # Clean up output directory before running
 LOGAN_CLEAN_UP="${LOGAN_CLEAN_UP:-false}"
 
+<<<<<<< Updated upstream
+=======
+# Enable component tagging
+LOGAN_COMPONENT_TAGGING="${LOGAN_COMPONENT_TAGGING:-false}"
+
+# Path to component definitions JSON file (for component tagging)
+LOGAN_COMPONENT_CONFIG="${LOGAN_COMPONENT_CONFIG:-}"
+
+
+>>>>>>> Stashed changes
 # Port for view mode HTTP server
 LOGAN_VIEW_PORT="${LOGAN_VIEW_PORT:-8000}"
 
@@ -98,6 +108,11 @@ print_config() {
     echo "  LOGAN_PROCESS_LOG_FILES: ${LOGAN_PROCESS_LOG_FILES}"
     echo "  LOGAN_PROCESS_TXT_FILES: ${LOGAN_PROCESS_TXT_FILES}"
     echo "  LOGAN_CLEAN_UP:          ${LOGAN_CLEAN_UP}"
+<<<<<<< Updated upstream
+=======
+    echo "  LOGAN_COMPONENT_TAGGING: ${LOGAN_COMPONENT_TAGGING}"
+    echo "  LOGAN_COMPONENT_CONFIG:  ${LOGAN_COMPONENT_CONFIG}"
+>>>>>>> Stashed changes
     echo "  LOGAN_VIEW_PORT:         ${LOGAN_VIEW_PORT}"
     echo ""
 }
@@ -183,6 +198,19 @@ run_analyze() {
         CMD="$CMD --clean-up"
     fi
 
+<<<<<<< Updated upstream
+=======
+    # Add component tagging flag
+    if [ "${LOGAN_COMPONENT_TAGGING,,}" = "true" ]; then
+        CMD="$CMD --component-tagging"
+    fi
+
+    # Add component config file
+    if [ -n "${LOGAN_COMPONENT_CONFIG}" ]; then
+        CMD="$CMD --component-config \"${LOGAN_COMPONENT_CONFIG}\""
+    fi
+
+>>>>>>> Stashed changes
     echo -e "${CYAN}Executing: ${CMD}${NC}"
     echo ""
 
